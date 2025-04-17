@@ -86,3 +86,7 @@ export const TRACKED_TOKENS = [
     icon: "💶",
   },
 ]; 
+
+// 🔑 Privy Authentication
+// Access Vite's environment variables properly
+export const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "clw6cwf3c00r0l80hq9sknplt"; 

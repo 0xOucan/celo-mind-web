@@ -1,16 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SendIcon, LoadingIcon } from './Icons';
 import { apiUrl } from '../config';
+import { sendChatMessage, AgentResponseType, ParsedAgentResponse } from '../services/agentService';
+import { useWallet } from '../providers/WalletContext';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import SyntaxHighlighter from 'react-syntax-highlighter';
+import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface Message {
   id: string;
   content: string;
   sender: 'user' | 'agent';
   timestamp: number;
+  type?: AgentResponseType;
+  requiresAction?: boolean;
+  data?: any;
 }
 
-// Component to render message content with clickable links
-const MessageDisplay = ({ content }: { content: string }) => {
+// Component to render message content with clickable links and transaction UI
+const MessageDisplay = ({ message }: { message: Message }) => {
+  const content = message.content;
+  
   // Process content to make links clickable
   const processContent = () => {
     // First check if we have markdown-style links [text](url)
@@ -30,11 +41,28 @@ const MessageDisplay = ({ content }: { content: string }) => {
     }
   };
   
+  // Add special UI for transaction messages
+  if (message.type === AgentResponseType.TRANSACTION || message.type === AgentResponseType.APPROVAL) {
+    return (
+      <div>
+        <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processContent() }} />
+        {message.requiresAction && (
+          <div className="mt-2 p-2 border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-600">
+            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+              This operation requires a wallet transaction. Please check your wallet extension for a signature request.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+  
   // Use dangerouslySetInnerHTML for all link rendering to avoid mixing approaches
   return <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processContent() }} />;
 };
 
 export default function ChatInterface() {
+  const { connectedAddress, isConnected } = useWallet();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -64,7 +92,8 @@ How can I help you today? You can ask me to:
 
 Just type your request below!`,
           sender: 'agent',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          type: AgentResponseType.INFO
         }
       ]);
     }
@@ -74,6 +103,23 @@ Just type your request below!`,
     e.preventDefault();
     
     if (!input.trim()) return;
+    
+    // Check if wallet is connected before allowing DeFi operations
+    if (!isConnected && 
+        (input.toLowerCase().includes('swap') || 
+         input.toLowerCase().includes('aave') || 
+         input.toLowerCase().includes('ichi') || 
+         input.toLowerCase().includes('approve'))) {
+      
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        content: "Please connect your wallet first to perform DeFi operations.",
+        sender: 'agent',
+        timestamp: Date.now(),
+        type: AgentResponseType.ERROR
+      }]);
+      return;
+    }
     
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -87,44 +133,68 @@ Just type your request below!`,
     setIsLoading(true);
     
     try {
-      const response = await fetch(`${apiUrl}/api/agent/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ userInput: input })
-      });
+      const response = await sendChatMessage(input);
       
-      const data = await response.json();
-      
-      if (response.ok) {
-        const agentMessage: Message = {
-          id: `agent-${Date.now()}`,
-          content: data.response || 'Sorry, I encountered an error processing your request.',
-          sender: 'agent',
-          timestamp: Date.now()
-        };
-        
-        setMessages(prev => [...prev, agentMessage]);
-      } else {
-        const errorMessage: Message = {
-          id: `error-${Date.now()}`,
-          content: `Error: ${data.error || 'Failed to get a response'}`,
-          sender: 'agent',
-          timestamp: Date.now()
-        };
-        
-        setMessages(prev => [...prev, errorMessage]);
-      }
-    } catch (error) {
-      const errorMessage: Message = {
-        id: `error-${Date.now()}`,
-        content: 'Network error. Please check your connection and try again.',
+      const agentMessage: Message = {
+        id: `agent-${Date.now()}`,
+        content: response.message,
         sender: 'agent',
+        timestamp: Date.now(),
+        type: response.type,
+        data: response.data
+      };
+      
+      // Add explanatory note for transaction requests
+      if (response.type === AgentResponseType.TRANSACTION) {
+        const enhancedMessage = `${response.message}\n\n*This transaction requires your wallet to sign it. If you approve, your wallet should prompt you to sign the transaction.*`;
+        
+        agentMessage.content = enhancedMessage;
+      }
+      
+      setMessages(prev => [...prev, agentMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        content: error instanceof Error ? error.message : 'An unknown error occurred',
+        sender: 'agent',
+        timestamp: Date.now(),
+        type: AgentResponseType.ERROR
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Function to automatically check transaction status
+  const sendStatusCheck = async () => {
+    try {
+      setIsLoading(true);
+      const statusMessage = "What's the status of my transaction?";
+      
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        content: statusMessage,
+        sender: 'user',
         timestamp: Date.now()
       };
       
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...prev, userMessage]);
+      
+      const response = await sendChatMessage(statusMessage);
+      
+      const agentMessage: Message = {
+        id: `agent-${Date.now()}`,
+        content: response.message,
+        sender: 'agent',
+        timestamp: Date.now(),
+        type: response.type
+      };
+      
+      setMessages(prev => [...prev, agentMessage]);
+    } catch (error) {
+      console.error("Failed to check transaction status:", error);
     } finally {
       setIsLoading(false);
     }
@@ -135,6 +205,11 @@ Just type your request below!`,
       <div className="p-4 bg-yellow-100 dark:bg-slate-700 border-b border-yellow-200 dark:border-slate-600">
         <h2 className="text-lg font-bold flex items-center">
           <span className="mr-2">🤖</span> AI Agent Chat
+          {!isConnected && (
+            <span className="ml-auto text-xs text-red-600 dark:text-red-400 px-2 py-1 rounded bg-red-100 dark:bg-red-900/20">
+              Wallet Not Connected
+            </span>
+          )}
         </h2>
       </div>
       
@@ -148,10 +223,16 @@ Just type your request below!`,
               className={`max-w-[80%] rounded-xl p-3 ${
                 message.sender === 'user' 
                   ? 'bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-100' 
-                  : 'bg-gray-100 dark:bg-slate-700'
+                  : message.type === AgentResponseType.ERROR
+                    ? 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
+                    : message.type === AgentResponseType.SUCCESS
+                      ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
+                      : message.type === AgentResponseType.TRANSACTION || message.type === AgentResponseType.APPROVAL
+                        ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200'
+                        : 'bg-gray-100 dark:bg-slate-700'
               }`}
             >
-              <MessageDisplay content={message.content} />
+              <MessageDisplay message={message} />
               <div className={`text-xs mt-1 ${
                 message.sender === 'user' 
                   ? 'text-yellow-700 dark:text-yellow-300' 

@@ -3,6 +3,10 @@ import ChatInterface from './components/ChatInterface';
 import Header from './components/Header';
 import WalletBalances from './components/WalletBalances';
 import InfoPanel from './components/InfoPanel';
+import WalletConnect from './components/WalletConnect';
+import { PrivyProvider } from './providers/PrivyProvider';
+import { WalletProvider } from './providers/WalletContext';
+import TransactionMonitor from './components/TransactionMonitor';
 
 export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -42,27 +46,39 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-yellow-50 dark:bg-slate-900 text-slate-900 dark:text-yellow-50 transition-colors duration-200">
-      <Header theme={theme} toggleTheme={toggleTheme} isAgentActive={isAgentActive} setIsAgentActive={setIsAgentActive} />
-      
-      <main className="container mx-auto px-4 py-8">
-        {!isAgentActive ? (
-          <InfoPanel onActivateAgent={() => setIsAgentActive(true)} />
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <ChatInterface />
+    <PrivyProvider>
+      <WalletProvider>
+        <div className="min-h-screen bg-yellow-50 dark:bg-slate-900 text-slate-900 dark:text-yellow-50 transition-colors duration-200">
+          <Header theme={theme} toggleTheme={toggleTheme} isAgentActive={isAgentActive} setIsAgentActive={setIsAgentActive} />
+          
+          <main className="container mx-auto px-4 py-8">
+            {/* Always show wallet connection at the top */}
+            <div className="mb-6">
+              <WalletConnect />
             </div>
-            <div>
-              <WalletBalances />
-            </div>
-          </div>
-        )}
-      </main>
-      
-      <footer className="container mx-auto p-4 text-center text-sm text-slate-600 dark:text-slate-400">
-        <p>🧠 CeloMΔIND - AI-Powered DeFi Interface - <a href="https://github.com/0xOucan/celo-mind-web" className="underline hover:text-yellow-600 dark:hover:text-yellow-400">GitHub</a></p>
-      </footer>
-    </div>
+            
+            {!isAgentActive ? (
+              <InfoPanel onActivateAgent={() => setIsAgentActive(true)} />
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <ChatInterface />
+                </div>
+                <div className="space-y-6">
+                  <WalletBalances />
+                </div>
+              </div>
+            )}
+          </main>
+          
+          {/* Transaction monitoring component */}
+          <TransactionMonitor />
+          
+          <footer className="container mx-auto p-4 text-center text-sm text-slate-600 dark:text-slate-400">
+            <p>🧠 CeloMΔIND - AI-Powered DeFi Interface - <a href="https://github.com/0xOucan/celo-mind-web" className="underline hover:text-yellow-600 dark:hover:text-yellow-400">GitHub</a></p>
+          </footer>
+        </div>
+      </WalletProvider>
+    </PrivyProvider>
   );
 } 

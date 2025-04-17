@@ -196,8 +196,16 @@ export const getAllTokenBalances = async (
   walletAddress?: string
 ): Promise<TokenBalance[]> => {
   try {
-    // If no wallet address is provided, try to get it from the backend
-    const address = walletAddress || await getWalletAddress();
+    // If no valid wallet address is provided, try to get it from the backend
+    let address = walletAddress;
+    
+    // Validate the address format
+    if (!address || !address.startsWith('0x') || address.length !== 42) {
+      console.log('Invalid wallet address provided to getAllTokenBalances, falling back to backend address');
+      address = await getWalletAddress();
+    } else {
+      console.log('Using provided wallet address for balance check:', address);
+    }
     
     const result: TokenBalance[] = [];
     

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { WalletIcon, LoadingIcon } from './Icons';
-import { getAllTokenBalances, TokenBalance, getWalletAddress } from '../services/blockchainService';
+import { getAllTokenBalances, TokenBalance } from '../services/blockchainService';
 import { DEFAULT_WALLET_ADDRESS } from '../config';
+import { useWallet } from '../providers/WalletContext';
 
 export default function WalletBalances() {
+  const { connectedAddress, isConnected } = useWallet();
   const [balances, setBalances] = useState<TokenBalance[]>([]);
   const [totalValue, setTotalValue] = useState<string>('$0.00');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -16,9 +18,11 @@ export default function WalletBalances() {
     setError(null);
     
     try {
-      // First get the wallet address from the backend
-      const address = await getWalletAddress();
+      // Use connected wallet address from context if available
+      const address = connectedAddress || DEFAULT_WALLET_ADDRESS;
       setWalletAddress(address);
+      
+      console.log('Fetching balances for address:', address);
       
       // Fetch balances directly from the blockchain using viem
       const tokenBalances = await getAllTokenBalances(address);
@@ -43,6 +47,13 @@ export default function WalletBalances() {
       setIsLoading(false);
     }
   };
+
+  // Fetch balances when connected wallet changes
+  useEffect(() => {
+    if (connectedAddress !== walletAddress) {
+      fetchBalances();
+    }
+  }, [connectedAddress]);
 
   // Fetch balances on component mount
   useEffect(() => {
