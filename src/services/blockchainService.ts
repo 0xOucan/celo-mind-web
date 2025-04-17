@@ -48,20 +48,12 @@ const publicClient = createPublicClient({
   transport: http(CELO_RPC_URL),
 });
 
-// Cache for the wallet address
-let cachedWalletAddress = '';  // Initialize with empty string instead of null
-
 /**
- * Get the wallet address from the backend API
+ * Get wallet address from backend
  */
 export const getWalletAddress = async (): Promise<string> => {
-  // Return cached address if available (non-empty)
-  if (cachedWalletAddress) {
-    return cachedWalletAddress;
-  }
-  
   try {
-    // Query the API to get the wallet address using the balance checker
+    // First try with direct "get wallet address" command
     const response = await fetch(`${apiUrl}/api/agent/chat`, {
       method: 'POST',
       headers: {
@@ -71,27 +63,67 @@ export const getWalletAddress = async (): Promise<string> => {
     });
     
     if (!response.ok) {
-      throw new Error('Failed to fetch wallet address from API');
+      throw new Error('Failed to get wallet address from backend');
     }
     
     const data = await response.json();
     const responseText = data.response || '';
     
-    // Try to extract the wallet address using regex
-    // Looking for patterns like: Address: 0x... or Your wallet address is 0x...
-    const addressMatch = responseText.match(/(?:Address|address|wallet address)[^\w`]*[`']?(0x[a-fA-F0-9]{40})[`']?/);
+    // Extract the wallet address from the response text
+    // Look for patterns like "Your wallet address is: 0x..." or "Address: 0x..."
+    const addressMatch = 
+      responseText.match(/[Aa]ddress(?:\s+is)?(?:\s*:\s*|\s+)(?:`)?0x[a-fA-F0-9]{40}(?:`)?/i) ||
+      responseText.match(/(?:`)?0x[a-fA-F0-9]{40}(?:`)?/);
     
-    if (addressMatch && addressMatch[1]) {
-      // Cache the address for future use
-      cachedWalletAddress = addressMatch[1];
-      console.log(`Wallet address fetched from API: ${cachedWalletAddress}`);
-      return cachedWalletAddress;
+    if (addressMatch) {
+      // Extract the address, removing any backticks, colons, "address" text
+      const extractedAddress = addressMatch[0].match(/0x[a-fA-F0-9]{40}/);
+      if (extractedAddress) {
+        const address = extractedAddress[0];
+        console.log('Found wallet address from API:', address);
+        return address;
+      }
     }
     
-    console.warn('Could not parse wallet address from API response:', responseText);
+    // If direct command failed, try getting it from wallet portfolio
+    console.log('Direct wallet address query failed, trying portfolio query');
+    const portfolioResponse = await fetch(`${apiUrl}/api/agent/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userInput: 'check wallet portfolio' })
+    });
+    
+    if (!portfolioResponse.ok) {
+      throw new Error('Failed to get wallet portfolio from backend');
+    }
+    
+    const portfolioData = await portfolioResponse.json();
+    const portfolioText = portfolioData.response || '';
+    
+    // Look for address in portfolio response which typically has "Address: 0x..." format
+    // at the beginning of the response
+    const portfolioAddressMatch = 
+      portfolioText.match(/[Aa]ddress(?:\s*:\s*|\s+)(?:`)?0x[a-fA-F0-9]{40}(?:`)?/i) ||
+      portfolioText.match(/(?:`)?0x[a-fA-F0-9]{40}(?:`)?/);
+    
+    if (portfolioAddressMatch) {
+      // Extract the address, removing any backticks, colons, "address" text
+      const extractedAddress = portfolioAddressMatch[0].match(/0x[a-fA-F0-9]{40}/);
+      if (extractedAddress) {
+        const address = extractedAddress[0];
+        console.log('Found wallet address from portfolio query:', address);
+        return address;
+      }
+    }
+    
+    // If no address was found in either query, use the default
+    console.warn('Could not extract wallet address from API responses, using default');
     return DEFAULT_WALLET_ADDRESS;
   } catch (error) {
-    console.error('Error fetching wallet address:', error);
+    console.error('Error getting wallet address from backend:', error);
+    // Fallback to default address
     return DEFAULT_WALLET_ADDRESS;
   }
 };
@@ -99,13 +131,10 @@ export const getWalletAddress = async (): Promise<string> => {
 /**
  * Get native CELO balance
  */
-export const getNativeBalance = async (address?: string): Promise<bigint> => {
+export const getNativeBalance = async (address: string = DEFAULT_WALLET_ADDRESS): Promise<bigint> => {
   try {
-    // If no address provided, fetch from API
-    const walletAddress = address || await getWalletAddress();
-    
     const balance = await publicClient.getBalance({
-      address: walletAddress as `0x${string}`,
+      address: address as `0x${string}`,
     });
     return balance;
   } catch (error) {
@@ -119,18 +148,15 @@ export const getNativeBalance = async (address?: string): Promise<bigint> => {
  */
 export const getTokenBalance = async (
   tokenAddress: string,
-  walletAddress?: string
+  walletAddress: string = DEFAULT_WALLET_ADDRESS
 ): Promise<bigint> => {
   try {
-    // If no address provided, fetch from API
-    const address = walletAddress || await getWalletAddress();
-    
     // Use readContract instead of getContract().read
     const balance = await publicClient.readContract({
       address: tokenAddress as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'balanceOf',
-      args: [address as `0x${string}`],
+      args: [walletAddress as `0x${string}`],
     });
     
     return balance as bigint;
@@ -170,9 +196,8 @@ export const getAllTokenBalances = async (
   walletAddress?: string
 ): Promise<TokenBalance[]> => {
   try {
-    // If no address provided, fetch from API
+    // If no wallet address is provided, try to get it from the backend
     const address = walletAddress || await getWalletAddress();
-    console.log(`Fetching token balances for address: ${address}`);
     
     const result: TokenBalance[] = [];
     

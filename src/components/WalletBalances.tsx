@@ -5,33 +5,23 @@ import { DEFAULT_WALLET_ADDRESS } from '../config';
 
 export default function WalletBalances() {
   const [balances, setBalances] = useState<TokenBalance[]>([]);
-  const [walletAddress, setWalletAddress] = useState<string>(DEFAULT_WALLET_ADDRESS);
   const [totalValue, setTotalValue] = useState<string>('$0.00');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch wallet address
-  useEffect(() => {
-    const fetchAddress = async () => {
-      try {
-        const address = await getWalletAddress();
-        setWalletAddress(address);
-      } catch (err) {
-        console.error('Error fetching wallet address:', err);
-      }
-    };
-    
-    fetchAddress();
-  }, []);
+  const [walletAddress, setWalletAddress] = useState<string>(DEFAULT_WALLET_ADDRESS);
 
   const fetchBalances = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
+      // First get the wallet address from the backend
+      const address = await getWalletAddress();
+      setWalletAddress(address);
+      
       // Fetch balances directly from the blockchain using viem
-      const tokenBalances = await getAllTokenBalances();
+      const tokenBalances = await getAllTokenBalances(address);
       
       if (tokenBalances.length > 0) {
         // Calculate total value
@@ -64,8 +54,9 @@ export default function WalletBalances() {
     return () => clearInterval(interval);
   }, []);
 
-  // Format wallet address for display (show first 6 and last 4 characters)
-  const formatWalletAddress = (address: string) => {
+  // Function to shorten wallet address for display
+  const shortenAddress = (address: string): string => {
+    if (!address) return '';
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
 
@@ -104,13 +95,19 @@ export default function WalletBalances() {
           </div>
         ) : (
           <>
-            <div className="mb-4 text-center">
-              <div className="text-sm text-slate-600 dark:text-slate-400">Wallet Address</div>
-              <div className="font-mono text-xs">
-                {formatWalletAddress(walletAddress)}
-              </div>
+            <div className="mb-4 px-3 py-2 bg-yellow-50 dark:bg-slate-700 rounded-lg text-center">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Connected Wallet</div>
+              <a 
+                href={`https://celoscan.io/address/${walletAddress}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-600 dark:text-blue-400 font-mono text-sm hover:underline"
+                title={walletAddress}
+              >
+                {shortenAddress(walletAddress)}
+              </a>
             </div>
-          
+            
             <div className="space-y-3">
               {balances.map((token, index) => (
                 <div key={index} className="flex items-center justify-between p-3 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 border border-gray-100 dark:border-slate-700">
