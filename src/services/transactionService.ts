@@ -1,5 +1,5 @@
 import { apiUrl } from '../config';
-import { createPublicClient, http, createWalletClient, custom, parseEther, Chain } from 'viem';
+import { createPublicClient, http, createWalletClient, custom } from 'viem';
 import { celo } from 'viem/chains';
 
 // Transaction status types
@@ -20,17 +20,7 @@ export interface PendingTransaction {
   status: string;
   timestamp: number;
   hash?: string;
-  metadata?: {
-    source: string;
-    walletAddress: string;
-    requiresSignature: boolean;
-    dataSize: number;
-    dataType: string;
-  };
 }
-
-// Store provider references to ensure they're not garbage collected
-const providerCache = new Map();
 
 /**
  * Fetch pending transactions from the backend
@@ -60,8 +50,6 @@ export const updateTransactionStatus = async (
   hash?: string
 ): Promise<boolean> => {
   try {
-    console.log(`Updating transaction ${txId} status to ${status}${hash ? ` with hash ${hash}` : ''}`);
-    
     const response = await fetch(`${apiUrl}/api/transactions/${txId}/update`, {
       method: 'POST',
       headers: {
@@ -85,109 +73,115 @@ export const updateTransactionStatus = async (
  * Execute a pending transaction
  * @param transaction The pending transaction to execute
  * @param walletClient Viem wallet client with signing capabilities
- * @param publicClient Optional public client for transaction monitoring
  */
 export const executeTransaction = async (
   transaction: PendingTransaction, 
-  walletClient: any,
-  publicClient?: any
+  walletClient: any
 ): Promise<string | null> => {
   try {
     if (!walletClient) {
       throw new Error('No wallet client available');
     }
     
-    console.log(`----- TRANSACTION EXECUTION START -----`);
-    console.log(`Executing transaction: ${transaction.id}`, {
+    console.log(`🔶 Executing transaction: ${transaction.id}`, {
       to: transaction.to,
       value: transaction.value,
-      data: transaction.data ? 
-        `${transaction.data.substring(0, 20)}... (${transaction.data.length} bytes)` : 
-        'none',
-      metadata: transaction.metadata
+      dataLength: transaction.data ? transaction.data.length : 0,
+      dataPrefix: transaction.data ? transaction.data.substring(0, 10) : 'none' // First 4 bytes is the function selector
     });
     
-    // Update transaction status to submitted first
+    // Update transaction status to submitted before sending to prevent duplicate attempts
     await updateTransactionStatus(transaction.id, TransactionStatus.SUBMITTED);
     
     // Prepare transaction parameters
-    const txParams = {
+    const txParams: any = {
       to: transaction.to as `0x${string}`,
-      value: BigInt(transaction.value),
-      data: transaction.data ? transaction.data as `0x${string}` : undefined
+      value: BigInt(transaction.value || '0'),
     };
     
-    console.log('Sending transaction to wallet for signing:', {
-      to: txParams.to,
-      value: txParams.value.toString(),
-      dataPresent: !!txParams.data
-    });
-    
-    // Make sure user has time to see the transaction in UI before wallet popup appears
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Send the transaction - this should trigger the wallet popup
-    console.log('⏳ Awaiting wallet signature...');
-    const hash = await walletClient.sendTransaction(txParams);
-    
-    console.log(`✅ Transaction signed successfully! Hash: ${hash}`);
-    
-    // Update transaction with hash
-    await updateTransactionStatus(transaction.id, TransactionStatus.SUBMITTED, hash);
-    
-    // If we have a public client, wait for transaction confirmation
-    if (publicClient) {
-      console.log(`Waiting for transaction confirmation...`);
-      try {
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        console.log(`Transaction confirmed! Status: ${receipt.status}`);
-        
-        if (receipt.status === 'success') {
-          await updateTransactionStatus(transaction.id, TransactionStatus.CONFIRMED, hash);
-        } else {
-          await updateTransactionStatus(transaction.id, TransactionStatus.FAILED, hash);
-        }
-      } catch (error) {
-        console.error('Error waiting for transaction confirmation:', error);
-      }
+    // Only add data if it exists and is non-empty
+    if (transaction.data && transaction.data !== '0x') {
+      txParams.data = transaction.data as `0x${string}`;
     }
     
-    console.log(`----- TRANSACTION EXECUTION COMPLETE -----`);
+    console.log('🔷 Sending transaction to wallet for signing...', {
+      to: txParams.to,
+      value: txParams.value.toString(),
+      hasData: !!txParams.data
+    });
+    
+    // Try to estimate gas first to catch any obvious errors before sending to the wallet
+    try {
+      const publicClient = createPublicClient({
+        chain: celo,
+        transport: http()
+      });
+      
+      const gasEstimate = await publicClient.estimateGas({
+        account: walletClient.account,
+        ...txParams
+      });
+      
+      console.log(`Estimated gas: ${gasEstimate.toString()}`);
+      
+      // Add a gas limit with 20% buffer to ensure transaction has enough gas
+      txParams.gas = gasEstimate * BigInt(12) / BigInt(10);
+    } catch (error) {
+      console.warn('Gas estimation failed, proceeding without gas limit:', error);
+      // Continue without gas estimate - wallet will handle it
+    }
+    
+    // Send the transaction - this should trigger the wallet popup
+    let hash: `0x${string}`;
+    
+    try {
+      // First we'll check if we can access the account
+      const [account] = await walletClient.getAddresses();
+      console.log(`Sending from account: ${account}`);
+      
+      // Send the transaction - THIS IS WHERE THE WALLET POPUP SHOULD APPEAR
+      console.log('⚡ Requesting wallet signature...');
+      hash = await walletClient.sendTransaction(txParams);
+      
+      console.log(`✅ Transaction signed successfully! Hash: ${hash}`);
+    } catch (error: any) {
+      // This catch block handles wallet rejection or other wallet-level errors
+      console.error('Error during transaction signing:', error);
+      
+      if (error.code === 4001 || 
+          (error.message && (
+            error.message.includes('reject') || 
+            error.message.includes('denied') ||
+            error.message.includes('cancel') ||
+            error.message.includes('dismissed')
+          ))) {
+        // User rejected the transaction
+        console.log('👨‍💻 Transaction was rejected by user');
+        await updateTransactionStatus(transaction.id, TransactionStatus.REJECTED);
+        return null;
+      }
+      
+      // Rethrow other errors to be caught by the outer catch block
+      throw error;
+    }
+    
+    // Transaction was signed successfully - update with hash
+    await updateTransactionStatus(transaction.id, TransactionStatus.SUBMITTED, hash);
     
     // Return the transaction hash
     return hash;
   } catch (error: any) {
-    console.error('----- TRANSACTION EXECUTION ERROR -----');
-    console.error('Error executing transaction:', error);
-    
-    // Log detailed error information
-    const errorInfo = {
-      message: error.message || 'Unknown error',
+    // This outer catch block handles any other errors in the process
+    console.error('❌ Error executing transaction:', error);
+    console.error('Details:', {
+      message: error.message,
       code: error.code,
-      data: error.data,
-      txId: transaction.id,
-      to: transaction.to,
-      value: transaction.value
-    };
-    console.error('Detailed error info:', errorInfo);
+      type: error.name,
+      transaction: transaction.id
+    });
     
-    // Different handling for user rejection vs other errors
-    if (
-      error.code === 4001 || 
-      (error.message && (
-        error.message.includes('user rejected') || 
-        error.message.includes('User denied') ||
-        error.message.includes('rejected') ||
-        error.message.includes('cancelled')
-      ))
-    ) {
-      console.log('Transaction was rejected by the user');
-      await updateTransactionStatus(transaction.id, TransactionStatus.REJECTED);
-    } else {
-      // Other error
-      console.log('Transaction failed with error');
-      await updateTransactionStatus(transaction.id, TransactionStatus.FAILED);
-    }
+    // Update transaction status to failed
+    await updateTransactionStatus(transaction.id, TransactionStatus.FAILED);
     return null;
   }
 };
@@ -203,85 +197,82 @@ export const createPrivyWalletClient = async (wallet: any) => {
       throw new Error('No wallet available');
     }
     
-    // Generate a unique cache key for this wallet
-    const cacheKey = `wallet_${wallet.address}`;
+    console.log('Creating wallet client with wallet type:', wallet.walletClientType);
+    console.log('Wallet address:', wallet.address);
     
-    // Check if we already have a cached client
-    if (providerCache.has(cacheKey)) {
-      console.log('Using cached wallet client for:', wallet.address);
-      return providerCache.get(cacheKey);
-    }
-    
-    console.log('Creating new wallet client for wallet:', {
-      address: wallet.address,
-      walletClientType: wallet.walletClientType
-    });
-    
-    // Get the EIP-1193 provider
+    // Different wallets provide the provider differently
     let provider;
     
     try {
-      // Try to get Ethereum provider (EIP-1193)
-      provider = await wallet.getEthereumProvider();
-      console.log('Successfully retrieved Ethereum provider from wallet', {
-        hasProvider: !!provider,
-        hasRequest: !!(provider && provider.request),
-        walletType: wallet.walletClientType
-      });
-    } catch (providerError) {
-      console.error('Error getting Ethereum provider:', providerError);
-      console.log('Falling back to wallet.provider');
-      provider = wallet.provider;
+      // Try to get the Ethereum provider - works for most browser extensions
+      const ethProvider = await wallet.getEthereumProvider();
+      
+      if (ethProvider) {
+        console.log('Retrieved EthereumProvider successfully', {
+          hasRequest: !!ethProvider.request,
+          hasAccounts: !!ethProvider.getAccounts,
+          hasSendAsync: !!ethProvider.sendAsync,
+          hasSend: !!ethProvider.send
+        });
+        provider = ethProvider;
+      } else if (wallet.provider) {
+        // Fallback to wallet.provider if getEthereumProvider() returns null
+        console.log('Using wallet.provider as fallback');
+        provider = wallet.provider;
+      } else {
+        throw new Error('No provider available in wallet');
+      }
+    } catch (error) {
+      console.error('Error getting ethereum provider:', error);
+      // Last resort fallback to wallet.provider
+      if (wallet.provider) {
+        console.log('Using wallet.provider as last resort fallback');
+        provider = wallet.provider;
+      } else {
+        throw new Error('No provider available in wallet after fallback attempts');
+      }
     }
     
-    if (!provider) {
-      throw new Error('No wallet provider available');
+    // Verify provider has required methods
+    if (!provider.request) {
+      console.error('Provider missing request method:', provider);
+      throw new Error('Provider is missing required request method');
     }
-    
-    // Test provider connectivity
+
+    // Test the provider with a simple request
     try {
-      const testResult = await provider.request({ method: 'eth_chainId' });
-      console.log('Provider test successful, chainId:', testResult);
-    } catch (testError) {
-      console.error('Provider test failed:', testError);
+      const chainId = await provider.request({ method: 'eth_chainId' });
+      console.log('Provider test successful. Chain ID:', chainId);
+    } catch (e) {
+      console.error('Provider test failed:', e);
+      // Continue anyway, as some providers might restrict certain methods
     }
     
-    // Create a wallet client with the wallet's provider
+    // Create wallet client with transport to the wallet's provider
+    console.log('Creating walletClient with custom transport');
     const walletClient = createWalletClient({
       account: wallet.address as `0x${string}`,
       chain: celo,
       transport: custom(provider)
     });
     
-    // Create a public client for status monitoring
-    const publicClient = createPublicClient({
-      chain: celo,
-      transport: http()
-    });
-    
-    // Test if the wallet client can access the account
+    // Verify wallet client by testing key methods
     try {
-      const accounts = await walletClient.getAddresses();
-      console.log('Wallet client successfully retrieved accounts:', accounts);
+      const addresses = await walletClient.getAddresses();
+      console.log('Wallet client working: retrieved addresses', addresses);
       
-      // Cache the client for future use
-      providerCache.set(cacheKey, {
-        walletClient,
-        publicClient,
-        provider,
-        address: wallet.address
-      });
+      // Test chain access
+      const chainId = await walletClient.getChainId();
+      console.log('Chain ID from wallet client:', chainId);
       
-      return {
-        walletClient,
-        publicClient,
-        provider,
-        address: wallet.address
-      };
-    } catch (addressError) {
-      console.error('Error getting addresses from wallet client:', addressError);
-      throw new Error('Could not access wallet accounts');
+      // Additional check to make sure wallet can sign
+      console.log('Wallet client ready for signing transactions');
+    } catch (error) {
+      console.error('Error testing wallet client:', error);
+      throw new Error('Wallet client creation succeeded but testing failed');
     }
+    
+    return walletClient;
   } catch (error: any) {
     console.error('Error creating wallet client:', error);
     console.error('Error details:', {
@@ -289,6 +280,7 @@ export const createPrivyWalletClient = async (wallet: any) => {
       code: error.code,
       wallet: wallet ? {
         address: wallet.address,
+        type: wallet.walletClientType,
         hasProvider: !!wallet.provider
       } : 'null'
     });
@@ -300,37 +292,40 @@ export const createPrivyWalletClient = async (wallet: any) => {
  * Poll for pending transactions and process them
  * @param walletClient Viem wallet client with signing capabilities
  */
-export const processPendingTransactions = async (clientDetails: any): Promise<void> => {
-  if (!clientDetails) {
-    console.error('No wallet client details provided');
-    return;
-  }
-  
-  const { walletClient, publicClient } = clientDetails;
-  
+export const processPendingTransactions = async (walletClient: any): Promise<void> => {
   try {
     const pendingTxs = await getPendingTransactions();
     
     if (pendingTxs.length > 0) {
-      console.log(`Found ${pendingTxs.length} pending transactions`);
-      
-      // Process one transaction at a time
-      for (const tx of pendingTxs) {
-        if (tx.status === TransactionStatus.PENDING) {
-          console.log(`Processing pending transaction: ${tx.id}`);
-          
-          try {
-            await executeTransaction(tx, walletClient, publicClient);
-            
-            // Add a delay between transactions to prevent overwhelming the wallet
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } catch (txError) {
-            console.error(`Error processing transaction ${tx.id}:`, txError);
+      console.log(`📋 Found ${pendingTxs.length} pending transactions`);
+    }
+    
+    // Process only the first pending transaction - better UX to handle one at a time
+    // This gives the user time to interact with their wallet between transactions
+    for (const tx of pendingTxs) {
+      if (tx.status === TransactionStatus.PENDING) {
+        console.log(`⚡ Processing pending transaction: ${tx.id}`);
+        
+        try {
+          const hash = await executeTransaction(tx, walletClient);
+          if (hash) {
+            console.log(`✅ Transaction executed successfully! Hash: ${hash}`);
+          } else {
+            console.log(`❌ Transaction was not completed (likely rejected)`);
           }
+          
+          // Only process one transaction at a time, then exit
+          // This prevents overwhelming the user with multiple wallet popups
+          break;
+        } catch (error) {
+          console.error(`Error executing transaction ${tx.id}:`, error);
+          
+          // Continue to the next transaction if this one fails
+          continue;
         }
       }
     }
   } catch (error) {
-    console.error('Error processing pending transactions:', error);
+    console.error('❌ Error processing pending transactions:', error);
   }
 }; 

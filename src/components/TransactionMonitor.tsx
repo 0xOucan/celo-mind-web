@@ -52,7 +52,10 @@ export default function TransactionMonitor() {
     if (!isConnected || isProcessing) return;
     
     const wallet = getPrimaryWallet();
-    if (!wallet) return;
+    if (!wallet) {
+      console.error('No wallet available to process transactions');
+      return;
+    }
 
     // Small delay to ensure UI is updated before processing starts
     setTimeout(async () => {
@@ -60,19 +63,26 @@ export default function TransactionMonitor() {
       
       try {
         // Create wallet client for the connected wallet
-        console.log('Creating wallet client for connected wallet:', wallet.address);
+        console.log('👛 Creating wallet client for connected wallet:', wallet.address);
+        
+        // Create wallet client - let the createPrivyWalletClient handle provider checks
         const walletClient = await createPrivyWalletClient(wallet);
         
         if (walletClient) {
-          console.log('Wallet client created successfully, processing pending transactions...');
-          // Process pending transactions
+          console.log('🚀 Wallet client created successfully, processing pending transactions...');
+          
+          // Process pending transactions - this will handle one transaction at a time
           await processPendingTransactions(walletClient);
+          
+          // After processing, refresh the list of pending transactions
+          await fetchPendingTransactions();
+          
           setLastProcessed(new Date());
         } else {
-          console.warn('No wallet client available for transaction processing');
+          console.warn('⚠️ No wallet client available for transaction processing');
         }
       } catch (error) {
-        console.error('Error processing transactions:', error);
+        console.error('❌ Error processing transactions:', error);
       } finally {
         setIsProcessing(false);
       }
@@ -168,17 +178,31 @@ export default function TransactionMonitor() {
           {pendingTransactions.map((tx) => (
             <div key={tx.id} className="p-3 bg-yellow-50 dark:bg-slate-700 rounded-lg">
               <div className="flex justify-between items-start">
-                <div className="font-mono text-xs truncate">To: {tx.to.slice(0, 6)}...{tx.to.slice(-6)}</div>
-                <div className="text-xs px-2 py-1 bg-yellow-200 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-full">
+                <div className="font-mono text-xs truncate">To: {tx.to.slice(0, 8)}...{tx.to.slice(-6)}</div>
+                <div className={`
+                  text-xs px-2 py-1 rounded-full
+                  ${tx.status === 'pending' ? 'bg-yellow-200 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 
+                    tx.status === 'submitted' ? 'bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200' : 
+                    'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}
+                `}>
                   {tx.status}
                 </div>
               </div>
-              <div className="text-sm mt-1 font-medium">{formatAmount(tx.value)} ETH</div>
+              
+              <div className="text-sm mt-1 font-medium">
+                {formatAmount(tx.value)} {tx.to === '0x471EcE3750Da237f93B8E339c536989b8978a438' ? 'CELO' : 'ETH'}
+              </div>
               
               {/* Additional transaction info */}
               {tx.data && (
                 <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Contract interaction: {tx.data.length} bytes
+                  {tx.data.startsWith('0xa9059cbb') ? (
+                    <span className="text-green-600 dark:text-green-400">Token Transfer</span>
+                  ) : tx.data.startsWith('0x095ea7b3') ? (
+                    <span className="text-blue-600 dark:text-blue-400">Token Approval</span>
+                  ) : (
+                    <span>Contract interaction: {tx.data.length} bytes</span>
+                  )}
                 </div>
               )}
               
@@ -187,8 +211,18 @@ export default function TransactionMonitor() {
               </div>
               
               <div className="flex justify-between mt-2">
-                <div className="text-xs text-blue-500">
-                  {isProcessing ? 'Waiting for wallet...' : 'Ready to sign'}
+                <div className="text-xs">
+                  {isProcessing ? (
+                    <span className="flex items-center text-blue-500">
+                      <svg className="animate-spin -ml-1 mr-2 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Check your wallet
+                    </span>
+                  ) : (
+                    <span className="text-blue-500">Ready to sign</span>
+                  )}
                 </div>
                 <button
                   onClick={() => rejectTransaction(tx.id)}
