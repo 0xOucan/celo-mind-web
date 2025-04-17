@@ -9,6 +9,31 @@ interface Message {
   timestamp: number;
 }
 
+// Component to render message content with clickable links
+const MessageDisplay = ({ content }: { content: string }) => {
+  // Process content to make links clickable
+  const processContent = () => {
+    // First check if we have markdown-style links [text](url)
+    const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    
+    if (markdownLinkRegex.test(content)) {
+      // If markdown links are present, process with markdown formatting
+      return content.replace(markdownLinkRegex, (match, text, url) => {
+        // Remove any trailing punctuation from the URL
+        const cleanUrl = url.replace(/[,.)]$/, '');
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${text}</a>`;
+      });
+    } else {
+      // Otherwise just look for plain URLs
+      const urlRegex = /(https?:\/\/[^\s),.]+)/g;
+      return content.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$&</a>');
+    }
+  };
+  
+  // Use dangerouslySetInnerHTML for all link rendering to avoid mixing approaches
+  return <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processContent() }} />;
+};
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -126,7 +151,7 @@ Just type your request below!`,
                   : 'bg-gray-100 dark:bg-slate-700'
               }`}
             >
-              <div className="whitespace-pre-wrap">{message.content}</div>
+              <MessageDisplay content={message.content} />
               <div className={`text-xs mt-1 ${
                 message.sender === 'user' 
                   ? 'text-yellow-700 dark:text-yellow-300' 

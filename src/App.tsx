@@ -12,21 +12,32 @@ export default function App() {
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-    document.documentElement.classList.toggle('dark');
+    
+    // Force immediate DOM update to reflect theme change
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    
     localStorage.setItem('celo-mind-theme', newTheme);
+    
+    // Log theme change to help with debugging
+    console.log(`Theme changed to: ${newTheme}`);
   };
 
   // Initialize theme from localStorage on mount
   useEffect(() => {
+    // Check for saved theme or use system preference
     const savedTheme = localStorage.getItem('celo-mind-theme') as 'light' | 'dark' | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
-      if (savedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-      }
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
       setTheme('dark');
       document.documentElement.classList.add('dark');
+    } else {
+      setTheme('light');
+      document.documentElement.classList.remove('dark');
     }
   }, []);
 
@@ -50,7 +61,7 @@ export default function App() {
       </main>
       
       <footer className="container mx-auto p-4 text-center text-sm text-slate-600 dark:text-slate-400">
-        <p>🧠 CeloMΔIND - AI-Powered DeFi Interface - <a href="https://github.com/your-username/celo-mind" className="underline hover:text-yellow-600 dark:hover:text-yellow-400">GitHub</a></p>
+        <p>🧠 CeloMΔIND - AI-Powered DeFi Interface - <a href="https://github.com/0xOucan/celo-mind-web" className="underline hover:text-yellow-600 dark:hover:text-yellow-400">GitHub</a></p>
       </footer>
     </div>
   );

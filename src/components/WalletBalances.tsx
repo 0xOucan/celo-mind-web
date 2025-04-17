@@ -1,101 +1,54 @@
 import React, { useEffect, useState } from 'react';
 import { WalletIcon, LoadingIcon } from './Icons';
-import { tokenIcons, apiUrl } from '../config';
-
-interface TokenBalance {
-  symbol: string;
-  balance: string;
-  balanceFormatted: string;
-  balanceUsd: string;
-  icon: string;
-}
+import { getAllTokenBalances, TokenBalance, getWalletAddress } from '../services/blockchainService';
+import { DEFAULT_WALLET_ADDRESS } from '../config';
 
 export default function WalletBalances() {
   const [balances, setBalances] = useState<TokenBalance[]>([]);
+  const [walletAddress, setWalletAddress] = useState<string>(DEFAULT_WALLET_ADDRESS);
   const [totalValue, setTotalValue] = useState<string>('$0.00');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch wallet address
+  useEffect(() => {
+    const fetchAddress = async () => {
+      try {
+        const address = await getWalletAddress();
+        setWalletAddress(address);
+      } catch (err) {
+        console.error('Error fetching wallet address:', err);
+      }
+    };
+    
+    fetchAddress();
+  }, []);
 
   const fetchBalances = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await fetch(`${apiUrl}/api/agent/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ userInput: 'check wallet balances' })
-      });
+      // Fetch balances directly from the blockchain using viem
+      const tokenBalances = await getAllTokenBalances();
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch wallet balances');
-      }
-      
-      const data = await response.json();
-      const responseText = data.response || '';
-      
-      // Parse the token balances from the response
-      // This is a simplified approach - in a production app, you'd want more robust parsing
-      const parsedBalances: TokenBalance[] = [];
-      let total = 0;
-      
-      const lines = responseText.split('\n');
-      for (const line of lines) {
-        // Looking for lines with token balances like "CELO: 1.32 ($0.66)"
-        const match = line.match(/- ([\w\s]+) \*\*([\w]+)\*\*: ([0-9.]+) \(\$([0-9.]+)\)/);
-        if (match) {
-          const icon = match[1].trim();
-          const symbol = match[2];
-          const balance = match[3];
-          const usdValue = match[4];
-          
-          parsedBalances.push({
-            symbol,
-            balance,
-            balanceFormatted: balance,
-            balanceUsd: `$${usdValue}`,
-            icon: tokenIcons[symbol as keyof typeof tokenIcons] || '💰'
-          });
-          
-          total += parseFloat(usdValue);
-        }
-      }
-      
-      // If we couldn't parse any balances, try an alternate format
-      if (parsedBalances.length === 0) {
-        for (const line of lines) {
-          const match = line.match(/([0-9.]+) ([\w]+) \(\$([0-9.]+)\)/);
-          if (match) {
-            const balance = match[1];
-            const symbol = match[2]; 
-            const usdValue = match[3];
-            
-            parsedBalances.push({
-              symbol,
-              balance,
-              balanceFormatted: balance,
-              balanceUsd: `$${usdValue}`,
-              icon: tokenIcons[symbol as keyof typeof tokenIcons] || '💰'
-            });
-            
-            total += parseFloat(usdValue);
-          }
-        }
-      }
-      
-      if (parsedBalances.length > 0) {
-        setBalances(parsedBalances);
+      if (tokenBalances.length > 0) {
+        // Calculate total value
+        const total = tokenBalances.reduce(
+          (sum, token) => sum + Number(token.balanceUsd.replace('$', '')), 
+          0
+        );
+        
+        setBalances(tokenBalances);
         setTotalValue(`$${total.toFixed(2)}`);
         setLastUpdated(new Date());
       } else {
-        setError('Could not parse balance information. Please try again.');
+        setError('Could not retrieve any token balances.');
       }
     } catch (err) {
-      setError('Failed to fetch wallet balances. Please try again.');
       console.error('Error fetching balances:', err);
+      setError('Failed to fetch wallet balances. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -110,6 +63,11 @@ export default function WalletBalances() {
     
     return () => clearInterval(interval);
   }, []);
+
+  // Format wallet address for display (show first 6 and last 4 characters)
+  const formatWalletAddress = (address: string) => {
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+  };
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
@@ -146,24 +104,31 @@ export default function WalletBalances() {
           </div>
         ) : (
           <>
-            <div className="mb-4 p-3 bg-yellow-50 dark:bg-slate-700 rounded-lg">
-              <div className="text-sm text-slate-600 dark:text-slate-400">Total Portfolio Value</div>
-              <div className="text-2xl font-bold">{totalValue}</div>
+            <div className="mb-4 text-center">
+              <div className="text-sm text-slate-600 dark:text-slate-400">Wallet Address</div>
+              <div className="font-mono text-xs">
+                {formatWalletAddress(walletAddress)}
+              </div>
             </div>
-            
+          
             <div className="space-y-3">
               {balances.map((token, index) => (
-                <div key={index} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700">
+                <div key={index} className="flex items-center justify-between p-3 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 border border-gray-100 dark:border-slate-700">
                   <div className="flex items-center">
-                    <span className="text-2xl mr-2">{token.icon}</span>
+                    <span className="text-2xl mr-3">{token.icon}</span>
                     <div>
                       <div className="font-medium">{token.symbol}</div>
-                      <div className="text-sm text-slate-600 dark:text-slate-400">{token.balanceFormatted}</div>
+                      <div className="text-sm text-slate-500 dark:text-slate-400">{token.balanceFormatted}</div>
                     </div>
                   </div>
-                  <div className="font-medium">{token.balanceUsd}</div>
+                  <div className="text-xl font-bold">{token.balanceUsd}</div>
                 </div>
               ))}
+            </div>
+            
+            <div className="mt-6 p-3 bg-yellow-50 dark:bg-slate-700 rounded-lg text-center">
+              <div className="text-sm text-slate-600 dark:text-slate-400">Total Portfolio Value</div>
+              <div className="text-2xl font-bold">{totalValue}</div>
             </div>
             
             {lastUpdated && (

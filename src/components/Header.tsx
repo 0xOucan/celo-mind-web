@@ -9,6 +9,12 @@ interface HeaderProps {
 }
 
 export default function Header({ theme, toggleTheme, isAgentActive, setIsAgentActive }: HeaderProps) {
+  // Handle theme toggle with both click handler and keyboard access
+  const handleToggleTheme = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.preventDefault();
+    toggleTheme();
+  };
+
   return (
     <header className="bg-yellow-100 dark:bg-slate-800 shadow-md">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -34,9 +40,13 @@ export default function Header({ theme, toggleTheme, isAgentActive, setIsAgentAc
           )}
           
           <button 
-            onClick={toggleTheme}
-            className="p-2 rounded-full hover:bg-yellow-200 dark:hover:bg-slate-700 transition-colors duration-200"
+            onClick={handleToggleTheme}
+            onKeyDown={(e) => e.key === 'Enter' && handleToggleTheme(e)}
+            className="p-2 rounded-full bg-yellow-200 dark:bg-slate-700 hover:bg-yellow-300 dark:hover:bg-slate-600 transition-colors duration-200"
             aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            tabIndex={0}
+            role="switch"
+            aria-checked={theme === 'dark'}
           >
             {theme === 'light' ? (
               <MoonIcon className="h-5 w-5" />
