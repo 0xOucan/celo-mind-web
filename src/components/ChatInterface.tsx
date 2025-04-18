@@ -24,12 +24,18 @@ const MessageDisplay = ({ message }: { message: Message }) => {
   
   // Process content to make links clickable
   const processContent = () => {
+    let processed = content;
+    
+    // Replace celoscan links with a "view in explorer" message that will be updated once we have the hash
+    const celoscanRegex = /Transaction:\s+https:\/\/celoscan\.io\/tx\/([a-zA-Z0-9]+)/g;
+    processed = processed.replace(celoscanRegex, 'You can view this transaction in the transaction panel once completed.');
+    
     // First check if we have markdown-style links [text](url)
     const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     
-    if (markdownLinkRegex.test(content)) {
+    if (markdownLinkRegex.test(processed)) {
       // If markdown links are present, process with markdown formatting
-      return content.replace(markdownLinkRegex, (match, text, url) => {
+      return processed.replace(markdownLinkRegex, (match, text, url) => {
         // Remove any trailing punctuation from the URL
         const cleanUrl = url.replace(/[,.)]$/, '');
         return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${text}</a>`;
@@ -37,7 +43,7 @@ const MessageDisplay = ({ message }: { message: Message }) => {
     } else {
       // Otherwise just look for plain URLs
       const urlRegex = /(https?:\/\/[^\s),.]+)/g;
-      return content.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$&</a>');
+      return processed.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$&</a>');
     }
   };
   
@@ -46,13 +52,14 @@ const MessageDisplay = ({ message }: { message: Message }) => {
     return (
       <div>
         <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processContent() }} />
-        {message.requiresAction && (
-          <div className="mt-2 p-2 border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-600">
-            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-              This operation requires a wallet transaction. Please check your wallet extension for a signature request.
-            </p>
-          </div>
-        )}
+        <div className="mt-2 p-2 border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-600">
+          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+            This operation requires a wallet transaction. Please check your wallet extension for a signature request.
+          </p>
+          <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+            You can monitor the status of your transaction in the Transaction panel at the bottom right.
+          </p>
+        </div>
       </div>
     );
   }
