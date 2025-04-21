@@ -1,7 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SendIcon, LoadingIcon } from './Icons';
 import { apiUrl } from '../config';
-import { sendChatMessage, AgentResponseType, ParsedAgentResponse } from '../services/agentService';
+import { 
+  sendChatMessage, 
+  AgentResponseType, 
+  ParsedAgentResponse, 
+  fetchTransactionNotifications,
+  TransactionNotification 
+} from '../services/agentService';
 import { useWallet } from '../providers/WalletContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -22,29 +28,60 @@ interface Message {
 const MessageDisplay = ({ message }: { message: Message }) => {
   const content = message.content;
   
-  // Process content to make links clickable
+  // Process content to make links clickable and handle transaction links
   const processContent = () => {
     let processed = content;
     
-    // Replace celoscan links with a "view in explorer" message that will be updated once we have the hash
-    const celoscanRegex = /Transaction:\s+https:\/\/celoscan\.io\/tx\/([a-zA-Z0-9]+)/g;
-    processed = processed.replace(celoscanRegex, 'You can view this transaction in the transaction panel once completed.');
+    // Clean up any HTML that might already be in the content
+    processed = processed.replace(/<\/?[^>]+(>|$)/g, '');
     
-    // First check if we have markdown-style links [text](url)
+    // Fix any doubly nested transaction URLs
+    const nestedTxUrlRegex = /(https?:\/\/(?:celoscan\.io|explorer\.celo\.org)\/tx\/)(https?:\/\/(?:celoscan\.io|explorer\.celo\.org)\/tx\/)(0x[a-fA-F0-9]{64})/g;
+    processed = processed.replace(nestedTxUrlRegex, (_, __, ___, hash) => {
+      return `https://celoscan.io/tx/${hash}`;
+    });
+    
+    // First handle View on Celoscan markdown links with proper formatting
+    processed = processed.replace(/\[View on Celoscan\]\((https?:\/\/(?:celoscan\.io|explorer\.celo\.org)\/tx\/)(0x[a-fA-F0-9]{64})\)/g, 
+      '<a href="$1$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">View on Celoscan</a>');
+    
+    // Replace broken/invalid transaction links with transaction panel reference
+    processed = processed.replace(/https?:\/\/(?:celoscan\.io|explorer\.celo\.org)\/tx\/(?:undefined|null|0x[a-zA-Z0-9-]{1,20}|[a-zA-Z0-9-]{1,30})(?![a-zA-Z0-9])/g, 
+      'You can monitor this transaction in the Transactions panel');
+    
+    // Find standalone Celoscan URLs that aren't already in links
+    processed = processed.replace(/(?<!")(https?:\/\/(?:celoscan\.io|explorer\.celo\.org)\/tx\/)(0x[a-fA-F0-9]{64})(?!")/g, 
+      '<a href="$1$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">View on Celoscan</a>');
+    
+    // Extract valid transaction hashes and create proper links
+    const validTxHashRegex = /(?:Transaction hash|Hash|Transaction):\s*(0x[a-fA-F0-9]{64})/g;
+    processed = processed.replace(validTxHashRegex, (match, hash) => {
+      return `Transaction: <a href="https://celoscan.io/tx/${hash}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">View on Celoscan</a>`;
+    });
+    
+    // Look for standalone transaction hashes (0x + 64 hex chars)
+    const standaloneHashRegex = /\b(0x[a-fA-F0-9]{64})\b/g;
+    processed = processed.replace(standaloneHashRegex, (match, hash) => {
+      // Only replace if not already part of a link
+      if (!processed.includes(`href="https://celoscan.io/tx/${hash}"`)) {
+        return `<a href="https://celoscan.io/tx/${hash}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${hash.substring(0, 8)}...${hash.substring(hash.length - 6)}</a>`;
+      }
+      return match;
+    });
+    
+    // Process other markdown-style links [text](url)
     const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    processed = processed.replace(markdownLinkRegex, (match, text, url) => {
+      // Remove any trailing punctuation from the URL
+      const cleanUrl = url.replace(/[,.)]$/, '');
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${text}</a>`;
+    });
     
-    if (markdownLinkRegex.test(processed)) {
-      // If markdown links are present, process with markdown formatting
-      return processed.replace(markdownLinkRegex, (match, text, url) => {
-        // Remove any trailing punctuation from the URL
-        const cleanUrl = url.replace(/[,.)]$/, '');
-        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${text}</a>`;
-      });
-    } else {
-      // Otherwise just look for plain URLs
-      const urlRegex = /(https?:\/\/[^\s),.]+)/g;
-      return processed.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$&</a>');
-    }
+    // Look for plain URLs that haven't been processed yet
+    const urlRegex = /(?<!")(https?:\/\/[^\s),."]+)(?!")/g;
+    processed = processed.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>');
+    
+    return processed;
   };
   
   // Add special UI for transaction messages
@@ -62,6 +99,21 @@ const MessageDisplay = ({ message }: { message: Message }) => {
         </div>
       </div>
     );
+  } else if (message.type === AgentResponseType.APPROVAL_PENDING) {
+    return (
+      <div>
+        <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processContent() }} />
+        <div className="mt-2 p-2 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-600">
+          <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+            This transaction is waiting for a prior approval to be confirmed.
+          </p>
+          <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
+            The system will automatically proceed with this transaction once the approval is confirmed.
+            You can monitor all transaction statuses in the Transaction panel.
+          </p>
+        </div>
+      </div>
+    );
   }
   
   // Use dangerouslySetInnerHTML for all link rendering to avoid mixing approaches
@@ -74,6 +126,7 @@ export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [notificationCheckTime, setNotificationCheckTime] = useState<Date>(new Date());
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -105,6 +158,77 @@ Just type your request below!`,
       ]);
     }
   }, []);
+
+  // Poll for transaction notifications
+  useEffect(() => {
+    if (!isConnected) return;
+    
+    const checkNotifications = async () => {
+      try {
+        const notifications = await fetchTransactionNotifications();
+        
+        if (notifications.length > 0) {
+          console.log(`📢 Received ${notifications.length} new transaction notifications`);
+          
+          // Add notifications as agent messages
+          notifications.forEach((notification: TransactionNotification) => {
+            console.log(`📣 Notification: ${notification.message}`);
+            
+            setMessages(prev => {
+              // Check if we already have this notification (avoid duplicates)
+              const notificationId = `notification-${notification.id}`;
+              if (prev.some(msg => msg.id === notificationId)) {
+                return prev;
+              }
+              
+              // Determine message type based on content
+              let messageType = AgentResponseType.INFO;
+              if (notification.message.includes('✅')) {
+                messageType = AgentResponseType.SUCCESS;
+              } else if (notification.message.includes('❌')) {
+                messageType = AgentResponseType.ERROR;
+              } else if (notification.message.includes('🔄')) {
+                messageType = AgentResponseType.TRANSACTION;
+              } else if (notification.message.includes('⏳')) {
+                // Check if this is a pending approval or a regular pending transaction
+                if (notification.message.includes('approval') && 
+                    (notification.message.includes('waiting for approval') || 
+                     notification.message.includes('approval is confirmed'))) {
+                  messageType = AgentResponseType.APPROVAL_PENDING;
+                } else {
+                  messageType = AgentResponseType.TRANSACTION;
+                }
+              } else if (notification.message.includes('🚫')) {
+                messageType = AgentResponseType.ERROR;
+              } else if (notification.message.includes('approval') && 
+                        notification.message.includes('confirmed')) {
+                messageType = AgentResponseType.APPROVAL;
+              }
+              
+              return [...prev, {
+                id: notificationId,
+                content: notification.message,
+                sender: 'agent',
+                timestamp: Date.now(),
+                type: messageType
+              }];
+            });
+          });
+          
+          // Update check time
+          setNotificationCheckTime(new Date());
+        }
+      } catch (error) {
+        console.error('Error fetching transaction notifications:', error);
+      }
+    };
+    
+    // Check for notifications immediately and then every 5 seconds
+    checkNotifications();
+    const intervalId = setInterval(checkNotifications, 5000);
+    
+    return () => clearInterval(intervalId);
+  }, [isConnected]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();

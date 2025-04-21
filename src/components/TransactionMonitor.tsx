@@ -1,276 +1,424 @@
 import React, { useEffect, useState } from 'react';
 import { useWallet } from '../providers/WalletContext';
-import { useWallets } from '@privy-io/react-auth';
 import { 
   getPendingTransactions, 
-  processPendingTransactions, 
-  createPrivyWalletClient,
+  executeTransaction, 
   updateTransactionStatus,
+  createPrivyWalletClient,
+  clearCompletedTransactions,
   PendingTransaction,
   TransactionStatus
 } from '../services/transactionService';
-
-// Polling interval for checking pending transactions
-const POLL_INTERVAL = 3000; // 3 seconds
+import { createPublicClient, http } from 'viem';
+import { celo } from 'viem/chains';
+import styles from '../styles/TransactionMonitor.module.css';
 
 export default function TransactionMonitor() {
-  const { connectedAddress, isConnected } = useWallet();
-  const { wallets } = useWallets();
   const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
+  const [walletClient, setWalletClient] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { connectedAddress, isConnected, wallets } = useWallet();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [transactionHistory, setTransactionHistory] = useState<PendingTransaction[]>([]);
-  const [lastProcessed, setLastProcessed] = useState<Date | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isChecking, setIsChecking] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isCleaning, setIsCleaning] = useState(false);
 
-  // Helper to get the primary wallet
-  const getPrimaryWallet = () => {
-    if (!wallets || wallets.length === 0) return null;
-    return wallets[0];
-  };
+  useEffect(() => {
+    const initWalletClient = async () => {
+      if (wallets && wallets.length > 0 && isConnected) {
+        try {
+          const client = await createPrivyWalletClient(wallets[0]);
+          setWalletClient(client);
+        } catch (error) {
+          console.error('Error initializing wallet client:', error);
+        }
+      }
+    };
+
+    initWalletClient();
+  }, [wallets, isConnected]);
 
   // Fetch pending transactions from the backend
-  const fetchPendingTransactions = async () => {
-    if (!isConnected) return;
-    
-    try {
-      const transactions = await getPendingTransactions();
-      
-      // If new transactions arrived, show a notification
-      if (transactions.length > pendingTransactions.length) {
-        console.log(`New transactions detected: ${transactions.length - pendingTransactions.length}`);
-        // You could add a browser notification here
+  useEffect(() => {
+    if (!connectedAddress) return;
+
+    const fetchTransactions = async () => {
+      try {
+        const transactions = await getPendingTransactions();
+        setPendingTransactions(transactions);
+        setLastRefresh(new Date());
+      } catch (error) {
+        console.error('Error fetching pending transactions:', error);
+        setError(`Failed to fetch transactions: ${(error as Error).message}`);
       }
+    };
+
+    fetchTransactions();
+    const interval = setInterval(fetchTransactions, 5000); // Poll every 5 seconds instead of 10
+
+    return () => clearInterval(interval);
+  }, [connectedAddress, refreshKey]);
+
+  // Check transaction status for submitted transactions
+  useEffect(() => {
+    if (!connectedAddress || pendingTransactions.length === 0 || isChecking) return;
+    
+    const checkTransactions = async () => {
+      setIsChecking(true);
+      try {
+        const publicClient = createPublicClient({
+          chain: celo,
+          transport: http()
+        });
+        
+        let hasApprovalCompleted = false;
+        
+        for (const tx of pendingTransactions) {
+          // Only check submitted transactions with valid hashes
+          if (tx.status === TransactionStatus.SUBMITTED && tx.hash && tx.hash.startsWith('0x') && tx.hash.length === 66) {
+            try {
+              // First check if the transaction is mined by getting the transaction data
+              const transaction = await publicClient.getTransaction({ 
+                hash: tx.hash as `0x${string}` 
+              });
+              
+              // If we found the transaction but it doesn't have a blockNumber yet, it's still pending
+              if (transaction && !transaction.blockNumber) {
+                console.log(`Transaction ${tx.hash} is still pending in the mempool`);
+                continue;
+              }
+              
+              // Now get the receipt which tells us if it succeeded or failed
+              const receipt = await publicClient.getTransactionReceipt({ 
+                hash: tx.hash as `0x${string}` 
+              });
+              
+              if (receipt) {
+                console.log(`📝 Transaction ${tx.hash} receipt:`, {
+                  status: receipt.status,
+                  blockNumber: receipt.blockNumber.toString(),
+                  gasUsed: receipt.gasUsed.toString(),
+                  transactionIndex: receipt.transactionIndex
+                });
+                
+                if (receipt.status === 'success') {
+                  console.log(`✅ Transaction ${tx.hash} confirmed successfully`);
+                  await updateTransactionStatus(tx.id, TransactionStatus.CONFIRMED);
+                  setPendingTransactions(prev => 
+                    prev.map(t => t.id === tx.id ? { ...t, status: TransactionStatus.CONFIRMED } : t)
+                  );
+                  
+                  // Check if this was an approval transaction
+                  const isApproval = tx.data?.startsWith('0x095ea7b3') || tx.data?.startsWith('0x39509351');
+                  if (isApproval) {
+                    console.log(`🔑 Approval transaction ${tx.id} confirmed - checking for dependent transactions`);
+                    hasApprovalCompleted = true;
+                  }
+                } else {
+                  console.error(`❌ Transaction ${tx.hash} failed on-chain`);
+                  await updateTransactionStatus(tx.id, TransactionStatus.FAILED);
+                  setPendingTransactions(prev => 
+                    prev.map(t => t.id === tx.id ? { ...t, status: TransactionStatus.FAILED } : t)
+                  );
+                }
+              }
+            } catch (error: any) {
+              // Only log specific errors, not the "receipt not found" errors which are expected
+              if (error.message && !error.message.includes('receipt not found')) {
+                console.warn(`Error checking transaction ${tx.hash}:`, error);
+              } else {
+                console.log(`Still waiting for receipt for transaction ${tx.hash.substring(0, 10)}...`);
+              }
+            }
+          }
+        }
+        
+        // If we detected a completed approval, check if we need to trigger any pending operations
+        if (hasApprovalCompleted) {
+          checkForDependentTransactions();
+        }
+      } catch (error) {
+        console.error('Error checking transaction status:', error);
+      } finally {
+        setIsChecking(false);
+      }
+    };
+    
+    // Helper function to find and process dependent transactions
+    const checkForDependentTransactions = () => {
+      console.log('📣 Checking for transactions waiting on approvals...');
       
-      setPendingTransactions(transactions);
-    } catch (error) {
-      console.error('Error fetching pending transactions:', error);
-    }
-  };
+      // Get all completed approval transactions
+      const confirmedApprovals = pendingTransactions.filter(tx => 
+        tx.status === TransactionStatus.CONFIRMED && 
+        (tx.data?.startsWith('0x095ea7b3') || tx.data?.startsWith('0x39509351'))
+      );
+      
+      if (confirmedApprovals.length > 0) {
+        console.log(`Found ${confirmedApprovals.length} confirmed approval transactions`);
+        
+        // For each pending transaction, check if it's waiting for an approval
+        const pendingTxs = pendingTransactions.filter(tx => tx.status === TransactionStatus.PENDING);
+        for (const pendingTx of pendingTxs) {
+          // Only continue if there's a corresponding confirmed approval for the same token
+          // Check if the transaction involves the same token contract
+          const approvalMatch = confirmedApprovals.find(approval => {
+            return approval.to === pendingTx.to || // Same token contract
+                  (approval.data && pendingTx.data && // Same token involved in the operation
+                   approval.data.substring(10, 74) === pendingTx.data.substring(10, 74));
+          });
+          
+          if (approvalMatch) {
+            console.log(`✨ Found pending transaction ${pendingTx.id} that can proceed now that approval ${approvalMatch.id} is confirmed`);
+            setRefreshKey(prev => prev + 1); // Refresh to trigger processPendingTransactions
+            return; // Only handle one at a time
+          }
+        }
+      }
+    };
+    
+    checkTransactions();
+    const interval = setInterval(checkTransactions, 3000); // Check every 3 seconds for better responsiveness
+    
+    return () => clearInterval(interval);
+  }, [connectedAddress, pendingTransactions, isChecking]);
 
   // Process pending transactions
-  const processTransactions = async () => {
-    if (!isConnected || isProcessing) return;
-    
-    const wallet = getPrimaryWallet();
-    if (!wallet) {
-      console.error('No wallet available to process transactions');
+  useEffect(() => {
+    if (!walletClient || !connectedAddress || isProcessing || pendingTransactions.length === 0) {
       return;
     }
 
-    // Small delay to ensure UI is updated before processing starts
-    setTimeout(async () => {
+    const processPendingTransactions = async () => {
       setIsProcessing(true);
+      setError(null);
+
+      // Find the first pending transaction that hasn't been submitted yet
+      // Prioritize approval transactions first
+      const approvalTx = pendingTransactions.find(tx => 
+        tx.status === TransactionStatus.PENDING && 
+        tx.data && (tx.data.startsWith('0x095ea7b3') || tx.data.startsWith('0x39509351'))
+      );
       
-      try {
-        // Create wallet client for the connected wallet
-        console.log('👛 Creating wallet client for connected wallet:', wallet.address);
-        
-        // Create wallet client - let the createPrivyWalletClient handle provider checks
-        const walletClient = await createPrivyWalletClient(wallet);
-        
-        if (walletClient) {
-          console.log('🚀 Wallet client created successfully, processing pending transactions...');
+      // Use approval tx if found, otherwise use first pending tx
+      const pendingTx = approvalTx || pendingTransactions.find(tx => tx.status === TransactionStatus.PENDING);
+      
+      if (pendingTx) {
+        try {
+          const isPriority = !!approvalTx;
+          console.log(`🔄 Processing ${isPriority ? 'PRIORITY ' : ''}transaction ${pendingTx.id}`);
           
-          // Process pending transactions - this will handle one transaction at a time
-          await processPendingTransactions(walletClient);
+          const hash = await executeTransaction(pendingTx, walletClient);
           
-          // After processing, refresh the list of pending transactions
-          await fetchPendingTransactions();
+          if (hash) {
+            console.log(`✅ Transaction submitted with hash: ${hash}`);
+            setPendingTransactions(prev => 
+              prev.map(tx => 
+                tx.id === pendingTx.id ? { ...tx, status: TransactionStatus.SUBMITTED, hash } : tx
+              )
+            );
+          } else {
+            // Transaction was rejected or failed - this is handled by executeTransaction
+            setRefreshKey(prev => prev + 1); // Force refresh to get latest status
+          }
+        } catch (error) {
+          console.error('Error executing transaction:', error);
+          setError(`Transaction failed: ${(error as Error).message}`);
           
-          setLastProcessed(new Date());
-        } else {
-          console.warn('⚠️ No wallet client available for transaction processing');
+          try {
+            await updateTransactionStatus(pendingTx.id, TransactionStatus.FAILED);
+          } catch (updateError) {
+            console.error('Error updating transaction status:', updateError);
+          }
         }
-      } catch (error) {
-        console.error('❌ Error processing transactions:', error);
-      } finally {
-        setIsProcessing(false);
       }
-    }, 500); // Small delay to allow UI to update
-  };
-  
-  // Explicitly reject a transaction
-  const rejectTransaction = async (txId: string) => {
+      
+      setIsProcessing(false);
+    };
+
+    processPendingTransactions();
+  }, [walletClient, connectedAddress, pendingTransactions, isProcessing]);
+
+  const handleReject = async (txId: string) => {
     try {
       await updateTransactionStatus(txId, TransactionStatus.REJECTED);
-      // Move to history
-      const tx = pendingTransactions.find(t => t.id === txId);
-      if (tx) {
-        setTransactionHistory(prev => [
-          {...tx, status: TransactionStatus.REJECTED},
-          ...prev
-        ]);
-      }
-      // Remove from pending
-      setPendingTransactions(prev => prev.filter(t => t.id !== txId));
+      setRefreshKey(prev => prev + 1); // Force refresh
     } catch (error) {
-      console.error(`Error rejecting transaction ${txId}:`, error);
+      console.error('Error rejecting transaction:', error);
+      setError(`Failed to reject: ${(error as Error).message}`);
     }
   };
 
-  // Poll for pending transactions
-  useEffect(() => {
-    if (!isConnected) return;
-    
-    // Initial fetch
-    fetchPendingTransactions();
-    
-    // Set up polling
-    const pollInterval = setInterval(() => {
-      fetchPendingTransactions();
-    }, POLL_INTERVAL);
-    
-    return () => clearInterval(pollInterval);
-  }, [isConnected]);
+  const getExplorerLink = (hash?: string) => {
+    if (!hash) return '';
+    const baseUrl = process.env.NEXT_PUBLIC_CELOSCAN_URL || 'https://explorer.celo.org/mainnet';
+    return `${baseUrl}/tx/${hash}`;
+  };
 
-  // Process transactions when they are found
-  useEffect(() => {
-    if (pendingTransactions.length > 0 && !isProcessing) {
-      processTransactions();
-    }
-  }, [pendingTransactions, isProcessing]);
-
-  // Only render if there are pending transactions or history to show
-  if (pendingTransactions.length === 0 && transactionHistory.length === 0) return null;
-
-  // Format amount display for better readability
-  const formatAmount = (value: string): string => {
-    try {
-      const amount = parseFloat(value) / 1e18;
-      return amount.toFixed(amount < 0.01 ? 6 : 4);
-    } catch (e) {
-      return "0";
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case TransactionStatus.PENDING:
+        return '⏳';
+      case TransactionStatus.SUBMITTED:
+        return '🔄';
+      case TransactionStatus.CONFIRMED:
+        return '✅';
+      case TransactionStatus.FAILED:
+        return '❌';
+      case TransactionStatus.REJECTED:
+        return '🚫';
+      default:
+        return '❓';
     }
   };
+
+  const formatTime = (timestamp?: number) => {
+    if (!timestamp) return '';
+    return new Date(timestamp).toLocaleTimeString();
+  };
+
+  const formatValue = (value?: string) => {
+    if (!value) return '0';
+    return parseFloat(value || '0').toFixed(4);
+  };
+
+  // Periodically clean up completed transactions
+  useEffect(() => {
+    if (!connectedAddress) return;
+
+    const cleanup = async () => {
+      try {
+        if (isCleaning) return;
+        setIsCleaning(true);
+        await clearCompletedTransactions();
+        setIsCleaning(false);
+      } catch (error) {
+        console.error('Error cleaning up transactions:', error);
+        setIsCleaning(false);
+      }
+    };
+
+    // Run cleanup every 5 minutes
+    const cleanupInterval = setInterval(cleanup, 5 * 60 * 1000);
+    
+    // Run once on mount
+    cleanup();
+    
+    return () => clearInterval(cleanupInterval);
+  }, [connectedAddress, isCleaning]);
+
+  // Check if there are any dependent transactions to process after an approval completes
+  useEffect(() => {
+    if (!walletClient || isLoading) return;
+
+    const completedApprovals = pendingTransactions.filter(
+      tx => 
+        tx.status === TransactionStatus.CONFIRMED && 
+        (tx.data?.startsWith('0x095ea7b3') || tx.data?.startsWith('0x39509351'))
+    );
+
+    if (completedApprovals.length === 0) return;
+
+    console.log('Found completed approvals that may have dependent transactions:', completedApprovals);
+    
+    // Find any pending transactions that might be related to these approvals
+    const pendingTxs = pendingTransactions.filter(tx => tx.status === TransactionStatus.PENDING);
+    
+    for (const pendingTx of pendingTxs) {
+      for (const approvalTx of completedApprovals) {
+        // Check if this pending tx is related to the approval (same token contract or same token data)
+        const isRelated = 
+          approvalTx.to === pendingTx.to || // Same token contract
+          (approvalTx.data && pendingTx.data && 
+           approvalTx.data.substring(10, 74) === pendingTx.data.substring(10, 74)); // Same token involved 
+        
+        if (isRelated) {
+          console.log(`🔄 Processing transaction ${pendingTx.id} that depends on completed approval ${approvalTx.id}`);
+          executeTransaction(pendingTx, walletClient)
+            .then(hash => {
+              if (hash) {
+                console.log(`✅ Auto-processed dependent transaction with hash: ${hash}`);
+              }
+            })
+            .catch(err => {
+              console.error(`Error auto-processing dependent transaction:`, err);
+            });
+          
+          // Only process one transaction at a time
+          return;
+        }
+      }
+    }
+  }, [pendingTransactions, walletClient, isLoading]);
 
   return (
-    <div className="fixed bottom-4 right-4 max-w-sm bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4 border border-yellow-200 dark:border-slate-700 z-50">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-bold text-slate-900 dark:text-white">Transactions</h3>
-        <div className="flex items-center gap-2">
-          {pendingTransactions.length > 0 && (
-            <div className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100 rounded-full">
-              {pendingTransactions.length} pending
-            </div>
-          )}
-          {transactionHistory.length > 0 && (
-            <button 
-              onClick={() => setShowHistory(!showHistory)}
-              className="text-xs px-2 py-1 bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 rounded-full hover:bg-gray-200 dark:hover:bg-slate-600"
-            >
-              {showHistory ? 'Hide History' : 'Show History'}
-            </button>
-          )}
-          {isProcessing && (
-            <div className="flex items-center">
-              <svg className="animate-spin h-4 w-4 text-yellow-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-          )}
-        </div>
+    <div className={styles.transactionMonitor}>
+      <h2>Transactions</h2>
+      <div className={styles.refreshInfo}>
+        Last checked: {lastRefresh.toLocaleTimeString()} 
+        {isChecking && <span className={styles.checking}> (checking...)</span>}
       </div>
+      {error && <div className={styles.error}>{error}</div>}
       
-      {pendingTransactions.length > 0 && (
-        <div className="space-y-2 max-h-60 overflow-y-auto mb-3">
-          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Pending</h4>
+      {pendingTransactions.length === 0 ? (
+        <div className={styles.noTransactions}>No pending transactions</div>
+      ) : (
+        <ul className={styles.transactionList}>
           {pendingTransactions.map((tx) => (
-            <div key={tx.id} className="p-3 bg-yellow-50 dark:bg-slate-700 rounded-lg">
-              <div className="flex justify-between items-start">
-                <div className="font-mono text-xs truncate">To: {tx.to.slice(0, 8)}...{tx.to.slice(-6)}</div>
-                <div className={`
-                  text-xs px-2 py-1 rounded-full
-                  ${tx.status === 'pending' ? 'bg-yellow-200 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 
-                    tx.status === 'submitted' ? 'bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200' : 
-                    'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}
-                `}>
-                  {tx.status}
-                </div>
+            <li key={tx.id} className={`${styles.transaction} ${styles[tx.status]}`}>
+              <div className={styles.txHeader}>
+                <span className={styles.status}>
+                  {getStatusIcon(tx.status)} {tx.status.toUpperCase()}
+                </span>
+                <span className={styles.time}>{formatTime(tx.timestamp)}</span>
               </div>
               
-              <div className="text-sm mt-1 font-medium">
-                {formatAmount(tx.value)} {tx.to === '0x471EcE3750Da237f93B8E339c536989b8978a438' ? 'CELO' : 'ETH'}
+              <div className={styles.txDetails}>
+                <div>Value: {formatValue(tx.value)}</div>
+                <div className={styles.address}>To: {tx.to.substring(0, 10)}...{tx.to.substring(tx.to.length - 8)}</div>
+                
+                {tx.status === TransactionStatus.PENDING && (
+                  <button 
+                    className={styles.rejectButton}
+                    onClick={() => handleReject(tx.id)}
+                    disabled={isProcessing}
+                  >
+                    Reject
+                  </button>
+                )}
+                
+                {tx.hash && tx.hash.startsWith('0x') && tx.hash.length === 66 ? (
+                  <div className={styles.txActions}>
+                    <a 
+                      href={getExplorerLink(tx.hash)} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className={styles.viewLink}
+                    >
+                      View on Explorer
+                    </a>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(tx.hash || '');
+                        alert('Transaction hash copied to clipboard!');
+                      }}
+                      className={styles.copyButton}
+                      title="Copy transaction hash"
+                    >
+                      Copy Hash
+                    </button>
+                  </div>
+                ) : tx.status !== TransactionStatus.PENDING && (
+                  <div className={styles.hashPending}>
+                    {tx.status === TransactionStatus.SUBMITTED ? 'Waiting for hash...' : 'No transaction hash available'}
+                  </div>
+                )}
               </div>
-              
-              {/* Additional transaction info */}
-              {tx.data && (
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {tx.data.startsWith('0xa9059cbb') ? (
-                    <span className="text-green-600 dark:text-green-400">Token Transfer</span>
-                  ) : tx.data.startsWith('0x095ea7b3') ? (
-                    <span className="text-blue-600 dark:text-blue-400">Token Approval</span>
-                  ) : (
-                    <span>Contract interaction: {tx.data.length} bytes</span>
-                  )}
-                </div>
-              )}
-              
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Transaction ID: {tx.id.slice(0, 10)}...
-              </div>
-              
-              <div className="flex justify-between mt-2">
-                <div className="text-xs">
-                  {isProcessing ? (
-                    <span className="flex items-center text-blue-500">
-                      <svg className="animate-spin -ml-1 mr-2 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Check your wallet
-                    </span>
-                  ) : (
-                    <span className="text-blue-500">Ready to sign</span>
-                  )}
-                </div>
-                <button
-                  onClick={() => rejectTransaction(tx.id)}
-                  className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-800/40 text-red-800 dark:text-red-300 rounded"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
+            </li>
           ))}
-        </div>
-      )}
-      
-      {showHistory && transactionHistory.length > 0 && (
-        <div className="space-y-2 max-h-40 overflow-y-auto border-t border-gray-200 dark:border-slate-700 pt-3">
-          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">History</h4>
-          {transactionHistory.map((tx) => (
-            <div key={tx.id} className="p-2 bg-gray-50 dark:bg-slate-700 rounded-lg">
-              <div className="flex justify-between items-start">
-                <div className="font-mono text-xs truncate">{tx.to.slice(0, 6)}...{tx.to.slice(-6)}</div>
-                <div className={`text-xs px-2 py-1 rounded-full ${
-                  tx.status === TransactionStatus.CONFIRMED ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200' :
-                  tx.status === TransactionStatus.REJECTED ? 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200' :
-                  'bg-gray-100 dark:bg-slate-600 text-gray-800 dark:text-gray-200'
-                }`}>
-                  {tx.status}
-                </div>
-              </div>
-              <div className="text-sm mt-1">{formatAmount(tx.value)} ETH</div>
-              {tx.hash && (
-                <a 
-                  href={`https://celoscan.io/tx/${tx.hash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-500 hover:underline mt-1 inline-block"
-                >
-                  View on Explorer
-                </a>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      
-      {lastProcessed && (
-        <div className="mt-2 text-xs text-center text-slate-500">
-          Last checked: {lastProcessed.toLocaleTimeString()}
-        </div>
+        </ul>
       )}
     </div>
   );

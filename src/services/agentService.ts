@@ -46,14 +46,44 @@ export const sendWalletAddress = async (walletAddress: string): Promise<{ succes
 };
 
 /**
+ * Transaction notification interface
+ */
+export interface TransactionNotification {
+  id: string;
+  message: string;
+}
+
+/**
+ * Fetch transaction notifications from the backend
+ * @returns Array of transaction notifications
+ */
+export const fetchTransactionNotifications = async (): Promise<TransactionNotification[]> => {
+  try {
+    const response = await fetch(`${apiUrl}/api/notifications`);
+    
+    if (!response.ok) {
+      console.error(`Failed to fetch notifications: ${response.statusText}`);
+      return [];
+    }
+    
+    const data = await response.json();
+    return data.success && data.notifications ? data.notifications : [];
+  } catch (error) {
+    console.error('Error fetching transaction notifications:', error);
+    return [];
+  }
+};
+
+/**
  * Types of agent responses
  */
 export enum AgentResponseType {
-  INFO = 'info',         // General informational response
-  ERROR = 'error',       // Error message
-  TRANSACTION = 'tx',    // Requires a transaction signature
-  APPROVAL = 'approval', // Requires token approval
-  SUCCESS = 'success',   // Operation completed successfully
+  INFO = 'info',              // General informational response
+  ERROR = 'error',            // Error message
+  TRANSACTION = 'tx',         // Requires a transaction signature
+  APPROVAL = 'approval',      // Requires token approval
+  APPROVAL_PENDING = 'approval_pending', // Transaction waiting for approval to complete
+  SUCCESS = 'success',        // Operation completed successfully
 }
 
 /**
@@ -79,7 +109,8 @@ export const parseAgentResponse = (response: string): ParsedAgentResponse => {
     response.includes('needs to be approved') || 
     response.includes('Please approve this transaction') ||
     response.includes('Please sign the transaction') ||
-    response.includes('waiting for your approval')
+    response.includes('waiting for your approval') ||
+    response.includes('check your wallet extension for a signature request')
   ) {
     type = AgentResponseType.TRANSACTION;
     
@@ -98,9 +129,19 @@ export const parseAgentResponse = (response: string): ParsedAgentResponse => {
   else if (
     response.includes('approve token') || 
     response.includes('token approval') ||
-    response.includes('needs your approval')
+    response.includes('needs your approval') ||
+    response.includes('approval transaction')
   ) {
     type = AgentResponseType.APPROVAL;
+  }
+  
+  // Check for transactions waiting for a prior approval
+  else if (
+    response.includes('waiting for approval') ||
+    response.includes('approval is confirmed') ||
+    response.includes('after the approval completes')
+  ) {
+    type = AgentResponseType.APPROVAL_PENDING;
   }
   
   // Check for errors
@@ -117,7 +158,8 @@ export const parseAgentResponse = (response: string): ParsedAgentResponse => {
   else if (
     response.includes('Success!') || 
     response.includes('Transaction completed') ||
-    response.includes('successfully completed')
+    response.includes('successfully completed') ||
+    response.includes('✅ Successfully')
   ) {
     type = AgentResponseType.SUCCESS;
   }
