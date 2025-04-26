@@ -1,6 +1,20 @@
-import { apiUrl } from '../config';
+import { apiUrl, CELO_CHAIN_ID } from '../config';
 import { createPublicClient, http, createWalletClient, custom } from 'viem';
 import { celo } from 'viem/chains';
+
+// Additional constants for chain switching
+const CELO_CHAIN_HEX = `0x${CELO_CHAIN_ID.toString(16)}`;
+const CELO_NETWORK_PARAMS = {
+  chainId: CELO_CHAIN_HEX,
+  chainName: 'Celo Mainnet',
+  nativeCurrency: {
+    name: 'CELO',
+    symbol: 'CELO',
+    decimals: 18
+  },
+  rpcUrls: ['https://forno.celo.org', 'https://rpc.ankr.com/celo'],
+  blockExplorerUrls: ['https://celoscan.io/']
+};
 
 // Transaction status types
 export enum TransactionStatus {
@@ -70,6 +84,60 @@ export const updateTransactionStatus = async (
 };
 
 /**
+ * Switch the wallet chain to Celo if needed
+ * @param provider The provider from the wallet
+ * @returns Boolean indicating whether chain was already Celo or successfully switched
+ */
+export const switchToceloChain = async (provider: any): Promise<boolean> => {
+  try {
+    // Get current chain ID
+    const currentChainId = await provider.request({ method: 'eth_chainId' });
+    
+    // Check if already on Celo
+    if (currentChainId === CELO_CHAIN_HEX) {
+      console.log('Already on Celo network');
+      return true;
+    }
+    
+    console.log(`Need to switch chains from ${currentChainId} to Celo (${CELO_CHAIN_HEX})`);
+    
+    // Try to switch to Celo chain
+    try {
+      // First try the standard wallet_switchEthereumChain method
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: CELO_CHAIN_HEX }]
+      });
+      console.log('Successfully switched to Celo chain');
+      return true;
+    } catch (switchError: any) {
+      // Chain doesn't exist yet in wallet
+      if (switchError.code === 4902 || 
+          (switchError.message && switchError.message.includes('chain hasn\'t been added'))) {
+        try {
+          // Try to add the chain to the wallet
+          await provider.request({
+            method: 'wallet_addEthereumChain',
+            params: [CELO_NETWORK_PARAMS]
+          });
+          console.log('Successfully added and switched to Celo chain');
+          return true;
+        } catch (addError) {
+          console.error('Failed to add Celo chain to wallet:', addError);
+          throw new Error('Failed to add Celo network to wallet. Please add it manually.');
+        }
+      } else {
+        console.error('Failed to switch to Celo chain:', switchError);
+        throw new Error('Failed to switch to Celo network. Please switch manually in your wallet.');
+      }
+    }
+  } catch (error) {
+    console.error('Error during chain switching:', error);
+    throw error;
+  }
+};
+
+/**
  * Execute a pending transaction
  * @param transaction The pending transaction to execute
  * @param walletClient Viem wallet client with signing capabilities
@@ -89,6 +157,30 @@ export const executeTransaction = async (
       dataLength: transaction.data ? transaction.data.length : 0,
       dataPrefix: transaction.data ? transaction.data.substring(0, 10) : 'none' // First 4 bytes is the function selector
     });
+    
+    // First try to get the provider from walletClient
+    const provider = walletClient.transport?.getProvider?.() || 
+                    walletClient.transport?.provider || 
+                    walletClient.provider;
+    
+    if (provider) {
+      // Try to switch to Celo chain before executing transaction
+      try {
+        await switchToceloChain(provider);
+        // After switching, re-create walletClient with the new chain ID to avoid mismatch errors
+        walletClient = createWalletClient({
+          account: walletClient.account,
+          chain: celo,
+          transport: custom(provider)
+        });
+      } catch (switchError) {
+        console.warn('Chain switching failed, transaction may fail:', switchError);
+        // Continue with transaction attempt even if switching fails
+        // Some wallets handle this gracefully on their end
+      }
+    } else {
+      console.warn('Could not access provider for chain switching, transaction may fail');
+    }
     
     // Update transaction status to submitted before sending to prevent duplicate attempts
     await updateTransactionStatus(transaction.id, TransactionStatus.SUBMITTED);
@@ -147,6 +239,13 @@ export const executeTransaction = async (
     } catch (error: any) {
       // This catch block handles wallet rejection or other wallet-level errors
       console.error('Error during transaction signing:', error);
+      
+      // Handle chain mismatch errors specifically
+      if (error.message && error.message.includes('chain') && error.message.includes('match')) {
+        console.error('Chain mismatch error detected:', error.message);
+        await updateTransactionStatus(transaction.id, TransactionStatus.FAILED);
+        throw new Error('Please switch your wallet to the Celo network (Chain ID: 42220) and try again.');
+      }
       
       if (error.code === 4001 || 
           (error.message && (
