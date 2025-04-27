@@ -8,7 +8,7 @@ import TransactionMonitor from './components/TransactionMonitor';
 import { PRIVY_APP_ID, CELO_CHAIN_ID } from './config';
 
 function App() {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true); // Default to dark mode
   const [networkWarning, setNetworkWarning] = useState(false);
 
   // Check if the wallet is on the correct network
@@ -61,19 +61,10 @@ function App() {
     }
   };
 
-  // Apply dark mode on mount if set in localStorage
+  // Always use dark mode
   useEffect(() => {
-    const isDarkMode = localStorage.getItem('darkMode') === 'true';
-    setDarkMode(isDarkMode);
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    }
+    document.documentElement.classList.add('dark');
   }, []);
-
-  // Update localStorage when dark mode changes
-  useEffect(() => {
-    localStorage.setItem('darkMode', darkMode.toString());
-  }, [darkMode]);
 
   return (
     <PrivyProvider
@@ -81,16 +72,16 @@ function App() {
       config={{
         loginMethods: ['wallet'],
         appearance: {
-          theme: darkMode ? 'dark' : 'light',
+          theme: 'dark',
           accentColor: '#3ECF8E',
         },
       }}
     >
       <WalletProvider>
-        <div className={`min-h-screen ${darkMode ? 'dark' : ''} transition-colors`}>
+        <div className="min-h-screen dark transition-colors">
           {networkWarning && (
-            <div className="bg-yellow-500 text-white px-4 py-3 text-center font-medium">
-              Warning: Your wallet is not connected to Celo network. Please switch to Celo (Chain ID: {CELO_CHAIN_ID}) to interact with transactions.
+            <div className="bg-yellow-600 text-white px-4 py-2 text-center font-medium">
+              Warning: Your wallet is not connected to Celo network. Please switch to Celo (Chain ID: {CELO_CHAIN_ID}).
             </div>
           )}
           <MainLayout darkMode={darkMode} toggleDarkMode={toggleDarkMode}>

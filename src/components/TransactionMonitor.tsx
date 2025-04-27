@@ -19,9 +19,7 @@ export default function TransactionMonitor() {
   const { wallets } = useWallets();
   const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [transactionHistory, setTransactionHistory] = useState<PendingTransaction[]>([]);
   const [lastProcessed, setLastProcessed] = useState<Date | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
 
   // Helper to get the primary wallet
@@ -140,44 +138,23 @@ export default function TransactionMonitor() {
     }
   }, [pendingTransactions, isProcessing]);
 
-  // Don't render UI if not connected
-  if (!isConnected) return null;
+  // Don't render UI if not connected or no transactions or errors
+  if (!isConnected || (pendingTransactions.length === 0 && !networkError)) return null;
 
-  // Render the transaction monitor UI (minimal)
+  // Render the transaction monitor UI
   return (
-    <div className="transaction-monitor" style={{ 
-      display: (pendingTransactions.length > 0 || networkError) ? 'block' : 'none',
-      position: 'fixed',
-      bottom: '10px',
-      right: '10px',
-      width: '300px',
-      padding: '10px',
-      backgroundColor: '#f8f9fa',
-      borderRadius: '5px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-      zIndex: 1000
-    }}>
+    <div className="fixed bottom-4 right-4 w-72 bg-slate-800 text-white rounded-lg shadow-xl border border-slate-700 z-50 overflow-hidden">
+      <div className="p-3 bg-slate-700 border-b border-slate-600 font-medium">
+        Transaction Status
+      </div>
+      
       {networkError && (
-        <div style={{ 
-          backgroundColor: '#f8d7da', 
-          color: '#721c24', 
-          padding: '10px', 
-          marginBottom: '10px',
-          borderRadius: '5px'
-        }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>Network Error</div>
-          <div>{networkError.replace('Network Error: ', '')}</div>
+        <div className="p-3 bg-red-900 border-b border-red-800">
+          <div className="font-medium mb-1">Network Error</div>
+          <div className="text-sm text-red-200 mb-2">{networkError.replace('Network Error: ', '')}</div>
           <button 
             onClick={ensureCorrectNetwork}
-            style={{
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              padding: '5px 10px',
-              borderRadius: '3px',
-              marginTop: '5px',
-              cursor: 'pointer'
-            }}
+            className="bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
           >
             Switch to Celo
           </button>
@@ -185,19 +162,38 @@ export default function TransactionMonitor() {
       )}
       
       {pendingTransactions.length > 0 && (
-        <div>
-          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>Pending Transactions</div>
-          <ul style={{ padding: '0 0 0 20px', margin: '0' }}>
-            {pendingTransactions.map(tx => (
-              <li key={tx.id} style={{ marginBottom: '5px' }}>
-                {tx.status === 'pending' && 'Waiting for signature...'}
-                {tx.status === 'submitted' && 'Transaction submitted...'}
-                {tx.status === 'confirmed' && 'Transaction confirmed'}
-                {tx.status === 'rejected' && 'Transaction rejected'}
-                {tx.status === 'failed' && 'Transaction failed'}
-              </li>
-            ))}
-          </ul>
+        <div className="p-3">
+          {pendingTransactions.map(tx => (
+            <div key={tx.id} className="mb-3 last:mb-0 bg-slate-700 p-2 rounded">
+              <div className="flex justify-between items-center mb-1">
+                <div className="text-xs text-slate-400">
+                  ID: {tx.id.slice(0, 10)}...
+                </div>
+                <div className={`
+                  text-xs px-2 py-0.5 rounded-full
+                  ${tx.status === 'pending' ? 'bg-yellow-500 text-yellow-900' : 
+                    tx.status === 'submitted' ? 'bg-blue-500 text-blue-900' : 
+                    tx.status === 'confirmed' ? 'bg-green-500 text-green-900' :
+                    tx.status === 'failed' ? 'bg-red-500 text-red-900' :
+                    'bg-slate-500 text-slate-900'}
+                `}>
+                  {tx.status}
+                </div>
+              </div>
+              
+              <div className="text-sm mb-1">
+                {tx.status === 'pending' && 'Waiting for wallet signature...'}
+                {tx.status === 'submitted' && 'Transaction submitted to blockchain...'}
+                {tx.status === 'confirmed' && 'Transaction confirmed!'}
+                {tx.status === 'rejected' && 'Transaction rejected by user'}
+                {tx.status === 'failed' && 'Transaction failed to process'}
+              </div>
+              
+              <div className="text-xs text-slate-400">
+                To: {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
