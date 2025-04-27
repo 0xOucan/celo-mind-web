@@ -1,29 +1,13 @@
-import { apiUrl, CELO_CHAIN_ID } from '../config';
+import { apiUrl } from '../config';
 import { createPublicClient, http, createWalletClient, custom } from 'viem';
 import { celo } from 'viem/chains';
-
-// Additional constants for chain switching
-const CELO_CHAIN_HEX = `0x${CELO_CHAIN_ID.toString(16)}`;
-const CELO_NETWORK_PARAMS = {
-  chainId: CELO_CHAIN_HEX,
-  chainName: 'Celo Mainnet',
-  nativeCurrency: {
-    name: 'CELO',
-    symbol: 'CELO',
-    decimals: 18
-  },
-  rpcUrls: ['https://forno.celo.org', 'https://rpc.ankr.com/celo'],
-  blockExplorerUrls: ['https://celoscan.io/']
-};
-
-// Transaction status types
-export enum TransactionStatus {
-  PENDING = 'pending',
-  SUBMITTED = 'submitted',
-  CONFIRMED = 'confirmed',
-  REJECTED = 'rejected',
-  FAILED = 'failed'
-}
+import { 
+  CELO_CHAIN_HEX, 
+  CELO_NETWORK_PARAMS,
+  TransactionStatus,
+  NetworkErrorType 
+} from '../constants/network';
+import { formatWeiToEther } from '../utils/formatting';
 
 // Transaction interface matching backend pendingTransactions
 export interface PendingTransaction {
@@ -34,6 +18,28 @@ export interface PendingTransaction {
   status: string;
   timestamp: number;
   hash?: string;
+  metadata?: {
+    source: string;
+    walletAddress: string;
+    requiresSignature: boolean;
+    dataSize: number;
+    dataType: string;
+  };
+}
+
+// Custom error class for better error handling
+export class TransactionError extends Error {
+  type: string;
+  details?: string;
+  transaction?: PendingTransaction;
+
+  constructor(message: string, type: string, details?: string, transaction?: PendingTransaction) {
+    super(message);
+    this.name = 'TransactionError';
+    this.type = type;
+    this.details = details;
+    this.transaction = transaction;
+  }
 }
 
 /**
@@ -44,14 +50,26 @@ export const getPendingTransactions = async (): Promise<PendingTransaction[]> =>
     const response = await fetch(`${apiUrl}/api/transactions/pending`);
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch pending transactions: ${response.statusText}`);
+      throw new TransactionError(
+        `Failed to fetch pending transactions: ${response.statusText}`,
+        'fetch_error',
+        `Status: ${response.status}`
+      );
     }
     
     const data = await response.json();
     return data.transactions || [];
   } catch (error) {
+    if (error instanceof TransactionError) {
+      throw error;
+    }
+    
     console.error('Error fetching pending transactions:', error);
-    return [];
+    throw new TransactionError(
+      'Failed to fetch pending transactions',
+      'fetch_error',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
   }
 };
 
@@ -62,7 +80,7 @@ export const updateTransactionStatus = async (
   txId: string, 
   status: TransactionStatus, 
   hash?: string
-): Promise<boolean> => {
+): Promise<PendingTransaction | null> => {
   try {
     const response = await fetch(`${apiUrl}/api/transactions/${txId}/update`, {
       method: 'POST',
@@ -73,13 +91,26 @@ export const updateTransactionStatus = async (
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to update transaction: ${response.statusText}`);
+      throw new TransactionError(
+        `Failed to update transaction: ${response.statusText}`,
+        'update_error',
+        `Status: ${response.status}`
+      );
     }
     
-    return true;
+    const data = await response.json();
+    return data.transaction || null;
   } catch (error) {
+    if (error instanceof TransactionError) {
+      throw error;
+    }
+    
     console.error(`Error updating transaction ${txId}:`, error);
-    return false;
+    throw new TransactionError(
+      'Failed to update transaction status',
+      'update_error',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
   }
 };
 
@@ -88,7 +119,7 @@ export const updateTransactionStatus = async (
  * @param provider The provider from the wallet
  * @returns Boolean indicating whether chain was already Celo or successfully switched
  */
-export const switchToceloChain = async (provider: any): Promise<boolean> => {
+export const switchToCeloChain = async (provider: any): Promise<boolean> => {
   try {
     // Get current chain ID
     const currentChainId = await provider.request({ method: 'eth_chainId' });
@@ -124,16 +155,32 @@ export const switchToceloChain = async (provider: any): Promise<boolean> => {
           return true;
         } catch (addError) {
           console.error('Failed to add Celo chain to wallet:', addError);
-          throw new Error('Failed to add Celo network to wallet. Please add it manually.');
+          throw new TransactionError(
+            'Failed to add Celo network to wallet. Please add it manually.',
+            NetworkErrorType.CHAIN_ADD_FAILED,
+            addError instanceof Error ? addError.message : 'Unknown error'
+          );
         }
       } else {
         console.error('Failed to switch to Celo chain:', switchError);
-        throw new Error('Failed to switch to Celo network. Please switch manually in your wallet.');
+        throw new TransactionError(
+          'Failed to switch to Celo network. Please switch manually in your wallet.',
+          NetworkErrorType.NETWORK_SWITCH_FAILED,
+          switchError.message || 'Unknown error'
+        );
       }
     }
   } catch (error) {
+    if (error instanceof TransactionError) {
+      throw error;
+    }
+    
     console.error('Error during chain switching:', error);
-    throw error;
+    throw new TransactionError(
+      'Error switching to Celo network',
+      NetworkErrorType.CONNECTION_FAILED,
+      error instanceof Error ? error.message : 'Unknown error'
+    );
   }
 };
 
@@ -148,12 +195,17 @@ export const executeTransaction = async (
 ): Promise<string | null> => {
   try {
     if (!walletClient) {
-      throw new Error('No wallet client available');
+      throw new TransactionError(
+        'No wallet client available',
+        'wallet_error',
+        'Please connect your wallet and try again'
+      );
     }
     
     console.log(`🔶 Executing transaction: ${transaction.id}`, {
       to: transaction.to,
       value: transaction.value,
+      valueInEther: formatWeiToEther(transaction.value),
       dataLength: transaction.data ? transaction.data.length : 0,
       dataPrefix: transaction.data ? transaction.data.substring(0, 10) : 'none' // First 4 bytes is the function selector
     });
@@ -166,7 +218,7 @@ export const executeTransaction = async (
     if (provider) {
       // Try to switch to Celo chain before executing transaction
       try {
-        await switchToceloChain(provider);
+        await switchToCeloChain(provider);
         // After switching, re-create walletClient with the new chain ID to avoid mismatch errors
         walletClient = createWalletClient({
           account: walletClient.account,
@@ -174,6 +226,9 @@ export const executeTransaction = async (
           transport: custom(provider)
         });
       } catch (switchError) {
+        if (switchError instanceof TransactionError) {
+          throw switchError;
+        }
         console.warn('Chain switching failed, transaction may fail:', switchError);
         // Continue with transaction attempt even if switching fails
         // Some wallets handle this gracefully on their end
@@ -199,89 +254,63 @@ export const executeTransaction = async (
     console.log('🔷 Sending transaction to wallet for signing...', {
       to: txParams.to,
       value: txParams.value.toString(),
+      valueInEther: formatWeiToEther(txParams.value),
       hasData: !!txParams.data
     });
-    
-    // Try to estimate gas first to catch any obvious errors before sending to the wallet
+
+    // Send the transaction
     try {
-      const publicClient = createPublicClient({
-        chain: celo,
-        transport: http()
-      });
+      const hash = await walletClient.sendTransaction(txParams);
       
-      const gasEstimate = await publicClient.estimateGas({
-        account: walletClient.account,
-        ...txParams
-      });
+      // Update transaction status with hash
+      await updateTransactionStatus(transaction.id, TransactionStatus.CONFIRMED, hash);
       
-      console.log(`Estimated gas: ${gasEstimate.toString()}`);
-      
-      // Add a gas limit with 20% buffer to ensure transaction has enough gas
-      txParams.gas = gasEstimate * BigInt(12) / BigInt(10);
-    } catch (error) {
-      console.warn('Gas estimation failed, proceeding without gas limit:', error);
-      // Continue without gas estimate - wallet will handle it
-    }
-    
-    // Send the transaction - this should trigger the wallet popup
-    let hash: `0x${string}`;
-    
-    try {
-      // First we'll check if we can access the account
-      const [account] = await walletClient.getAddresses();
-      console.log(`Sending from account: ${account}`);
-      
-      // Send the transaction - THIS IS WHERE THE WALLET POPUP SHOULD APPEAR
-      console.log('⚡ Requesting wallet signature...');
-      hash = await walletClient.sendTransaction(txParams);
-      
-      console.log(`✅ Transaction signed successfully! Hash: ${hash}`);
-    } catch (error: any) {
-      // This catch block handles wallet rejection or other wallet-level errors
-      console.error('Error during transaction signing:', error);
-      
-      // Handle chain mismatch errors specifically
-      if (error.message && error.message.includes('chain') && error.message.includes('match')) {
-        console.error('Chain mismatch error detected:', error.message);
-        await updateTransactionStatus(transaction.id, TransactionStatus.FAILED);
-        throw new Error('Please switch your wallet to the Celo network (Chain ID: 42220) and try again.');
-      }
-      
-      if (error.code === 4001 || 
-          (error.message && (
-            error.message.includes('reject') || 
-            error.message.includes('denied') ||
-            error.message.includes('cancel') ||
-            error.message.includes('dismissed')
-          ))) {
-        // User rejected the transaction
-        console.log('👨‍💻 Transaction was rejected by user');
+      console.log('✅ Transaction submitted successfully:', hash);
+      return hash;
+    } catch (txError: any) {
+      // Check if user rejected the transaction
+      if (
+        txError.code === 4001 ||  // MetaMask/standard rejection code
+        (txError.message && (
+          txError.message.includes('rejected') ||
+          txError.message.includes('denied') ||
+          txError.message.includes('cancelled') ||
+          txError.message.includes('canceled')
+        ))
+      ) {
+        console.warn('Transaction rejected by user:', txError);
         await updateTransactionStatus(transaction.id, TransactionStatus.REJECTED);
-        return null;
+        throw new TransactionError(
+          'Transaction rejected by user',
+          'user_rejection',
+          'You rejected the transaction in your wallet',
+          transaction
+        );
+      } else {
+        // Other transaction error
+        console.error('Transaction failed:', txError);
+        await updateTransactionStatus(transaction.id, TransactionStatus.FAILED);
+        throw new TransactionError(
+          'Transaction failed to process',
+          'transaction_error',
+          txError.message || 'Unknown error',
+          transaction
+        );
       }
-      
-      // Rethrow other errors to be caught by the outer catch block
+    }
+  } catch (error) {
+    // Handle errors that might have occurred outside transaction execution
+    if (error instanceof TransactionError) {
       throw error;
     }
     
-    // Transaction was signed successfully - update with hash
-    await updateTransactionStatus(transaction.id, TransactionStatus.SUBMITTED, hash);
-    
-    // Return the transaction hash
-    return hash;
-  } catch (error: any) {
-    // This outer catch block handles any other errors in the process
-    console.error('❌ Error executing transaction:', error);
-    console.error('Details:', {
-      message: error.message,
-      code: error.code,
-      type: error.name,
-      transaction: transaction.id
-    });
-    
-    // Update transaction status to failed
-    await updateTransactionStatus(transaction.id, TransactionStatus.FAILED);
-    return null;
+    console.error('Error executing transaction:', error);
+    throw new TransactionError(
+      'Failed to execute transaction',
+      'execution_error',
+      error instanceof Error ? error.message : 'Unknown error',
+      transaction
+    );
   }
 };
 

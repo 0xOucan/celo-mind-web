@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useWallet } from '../providers/WalletContext';
 import { useWallets } from '@privy-io/react-auth';
+import { TransactionStatus } from '../constants/network';
 import { 
   getPendingTransactions, 
   processPendingTransactions, 
   createPrivyWalletClient,
   updateTransactionStatus,
   PendingTransaction,
-  TransactionStatus,
-  switchToceloChain
+  switchToCeloChain
 } from '../services/transactionService';
 
 // Polling interval for checking pending transactions
@@ -40,7 +40,7 @@ export default function TransactionMonitor() {
       try {
         const provider = await wallet.getEthereumProvider();
         if (provider) {
-          await switchToceloChain(provider);
+          await switchToCeloChain(provider);
           console.log('Network verified for Celo transactions');
         } else {
           console.warn('Could not get provider to switch networks');
