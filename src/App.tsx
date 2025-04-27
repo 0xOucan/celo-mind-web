@@ -1,55 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { PrivyProvider } from '@privy-io/react-auth';
 import ChatInterface from './components/ChatInterface';
-import MainLayout from './components/MainLayout';
 import WalletBalances from './components/WalletBalances';
+import InfoPanel from './components/InfoPanel';
+import WalletConnect, { WalletStatusBar } from './components/WalletConnect';
+import { PrivyProvider } from './providers/PrivyProvider';
 import { WalletProvider } from './providers/WalletContext';
 import TransactionMonitor from './components/TransactionMonitor';
-import { PRIVY_APP_ID, CELO_CHAIN_ID } from './config';
 
-function App() {
-  const [darkMode, setDarkMode] = useState(true); // Default to dark mode
-  const [networkWarning, setNetworkWarning] = useState(false);
-
-  // Check if the wallet is on the correct network
-  useEffect(() => {
-    const checkNetwork = async () => {
-      if (!window.ethereum) return;
-      
-      try {
-        // Get current chain ID
-        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-        const chainId = parseInt(chainIdHex, 16);
-        
-        if (chainId !== CELO_CHAIN_ID) {
-          console.warn(`Wallet on incorrect network: ${chainId}. Celo network (${CELO_CHAIN_ID}) required.`);
-          setNetworkWarning(true);
-        } else {
-          setNetworkWarning(false);
-        }
-        
-        // Listen for chain change events
-        const handleChainChanged = (chainIdHex: string) => {
-          const newChainId = parseInt(chainIdHex, 16);
-          if (newChainId !== CELO_CHAIN_ID) {
-            setNetworkWarning(true);
-          } else {
-            setNetworkWarning(false);
-          }
-        };
-        
-        window.ethereum.on('chainChanged', handleChainChanged);
-        
-        return () => {
-          window.ethereum.removeListener('chainChanged', handleChainChanged);
-        };
-      } catch (error) {
-        console.error('Error checking network:', error);
-      }
-    };
-    
-    checkNetwork();
-  }, []);
+export default function App() {
+  const [darkMode, setDarkMode] = useState(true);
+  const [isAgentActive, setIsAgentActive] = useState(false);
 
   // Toggle dark mode
   const toggleDarkMode = () => {
@@ -59,46 +19,91 @@ function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    
+    localStorage.setItem('celo-mind-theme', darkMode ? 'light' : 'dark');
   };
 
-  // Always use dark mode
+  // Initialize theme from localStorage on mount
   useEffect(() => {
-    document.documentElement.classList.add('dark');
+    // Check for saved theme or use system preference
+    const savedTheme = localStorage.getItem('celo-mind-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+      setDarkMode(true);
+      document.documentElement.classList.add('dark');
+    } else if (savedTheme === 'light') {
+      setDarkMode(false);
+      document.documentElement.classList.remove('dark');
+    }
   }, []);
 
   return (
-    <PrivyProvider
-      appId={PRIVY_APP_ID}
-      config={{
-        loginMethods: ['wallet'],
-        appearance: {
-          theme: 'dark',
-          accentColor: '#3ECF8E',
-        },
-      }}
-    >
+    <PrivyProvider>
       <WalletProvider>
-        <div className="min-h-screen dark transition-colors">
-          {networkWarning && (
-            <div className="bg-yellow-600 text-white px-4 py-2 text-center font-medium">
-              Warning: Your wallet is not connected to Celo network. Please switch to Celo (Chain ID: {CELO_CHAIN_ID}).
-            </div>
-          )}
-          <MainLayout darkMode={darkMode} toggleDarkMode={toggleDarkMode}>
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-              <div className="lg:col-span-3">
-                <ChatInterface />
+        <div className="min-h-screen bg-slate-900 text-white">
+          {/* Main header */}
+          <header className="bg-slate-800 px-6 py-3 shadow-lg">
+            <div className="container mx-auto flex justify-between items-center">
+              {/* Branding Section - Left */}
+              <div className="flex items-center">
+                <span role="img" aria-label="brain" className="text-2xl mr-2">🧠</span>
+                <h1 className="text-xl font-bold tracking-tight">CeloMAIND</h1>
+                <span className="ml-2 bg-yellow-600 text-xs font-medium px-2 py-1 rounded">
+                  AI-Powered DeFi
+                </span>
               </div>
-              <div className="lg:col-span-1">
-                <WalletBalances />
+              
+              {/* Controls Section - Right */}
+              <div className="flex items-center space-x-4">
+                <WalletConnect />
+                
+                <button 
+                  onClick={toggleDarkMode}
+                  className="p-1.5 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-200"
+                  aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                  {darkMode ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
-          </MainLayout>
+          </header>
+          
+          {/* Wallet status bar */}
+          <WalletStatusBar />
+          
+          {/* Main content */}
+          <main className="container mx-auto px-4 py-6">
+            {!isAgentActive ? (
+              <InfoPanel onActivateAgent={() => setIsAgentActive(true)} />
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <ChatInterface />
+                </div>
+                <div className="lg:col-span-1">
+                  <WalletBalances />
+                </div>
+              </div>
+            )}
+          </main>
+          
+          {/* Transaction monitoring component */}
           <TransactionMonitor />
+          
+          <footer className="bg-slate-800 py-3 text-center text-slate-400 text-sm">
+            <p className="container mx-auto">🧠 CeloMΔIND - AI-Powered DeFi Interface</p>
+          </footer>
         </div>
       </WalletProvider>
     </PrivyProvider>
   );
-}
-
-export default App; 
+} 
