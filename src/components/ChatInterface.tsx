@@ -137,10 +137,10 @@ const MessageDisplay = ({ message }: { message: Message }) => {
     // Process Markdown-style links [text](url)
     const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     processed = processed.replace(markdownLinkRegex, (match, text, url) => {
-      // Remove any trailing punctuation from the URL
-      const cleanUrl = url.replace(/[,.)]$/, '');
-      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${text}</a>`;
-    });
+        // Remove any trailing punctuation from the URL
+        const cleanUrl = url.replace(/[,.)]$/, '');
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${text}</a>`;
+      });
     
     // Process plain URLs that aren't already in HTML tags
     const urlRegex = /(?<!href="|">)(https?:\/\/[^\s),.]+)/g;

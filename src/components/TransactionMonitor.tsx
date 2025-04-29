@@ -89,7 +89,7 @@ export default function TransactionMonitor() {
         // Try to switch to Celo network whenever new transactions arrive
         ensureCorrectNetwork();
       }
-
+      
       // Move completed transactions to completedTransactions
       const currentTime = Date.now();
       const newCompletedTxs: PendingTransaction[] = [];
@@ -265,47 +265,47 @@ export default function TransactionMonitor() {
       
       {!isMinimized && (
         <>
-          {networkError && (
-            <div className="p-3 bg-red-900 border-b border-red-800">
-              <div className="font-medium mb-1">Network Error</div>
-              <div className="text-sm text-red-200 mb-2">{networkError.replace('Network Error: ', '')}</div>
-              <button 
-                onClick={ensureCorrectNetwork}
-                className="bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
-              >
-                Switch to Celo
-              </button>
-            </div>
-          )}
-          
+      {networkError && (
+        <div className="p-3 bg-red-900 border-b border-red-800">
+          <div className="font-medium mb-1">Network Error</div>
+          <div className="text-sm text-red-200 mb-2">{networkError.replace('Network Error: ', '')}</div>
+          <button 
+            onClick={ensureCorrectNetwork}
+            className="bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
+          >
+            Switch to Celo
+          </button>
+        </div>
+      )}
+      
           {hasNoContent ? (
             <div className="p-4 text-center text-gray-400">
               No transactions to display
             </div>
           ) : (
             <div className="p-3 max-h-80 overflow-y-auto">
-              {pendingTransactions.length > 0 && (
+      {pendingTransactions.length > 0 && (
                 <div className="mb-2">
                   <div className="text-sm font-medium mb-2">Pending Transactions</div>
-                  {pendingTransactions.map(tx => (
-                    <div key={tx.id} className="mb-3 last:mb-0 bg-slate-700 p-2 rounded">
-                      <div className="flex justify-between items-center mb-1">
-                        <div className="text-xs text-slate-400">
-                          ID: {tx.id.slice(0, 10)}...
-                        </div>
-                        <div className={`
-                          text-xs px-2 py-0.5 rounded-full
-                          ${tx.status === 'pending' ? 'bg-yellow-500 text-yellow-900' : 
-                            tx.status === 'submitted' ? 'bg-blue-500 text-blue-900' : 
-                            'bg-slate-500 text-slate-900'}
-                        `}>
-                          {tx.status}
-                        </div>
-                      </div>
-                      
-                      <div className="text-sm mb-1">
-                        {tx.status === 'pending' && 'Waiting for wallet signature...'}
-                        {tx.status === 'submitted' && 'Transaction submitted to blockchain...'}
+          {pendingTransactions.map(tx => (
+            <div key={tx.id} className="mb-3 last:mb-0 bg-slate-700 p-2 rounded">
+              <div className="flex justify-between items-center mb-1">
+                <div className="text-xs text-slate-400">
+                  ID: {tx.id.slice(0, 10)}...
+                </div>
+                <div className={`
+                  text-xs px-2 py-0.5 rounded-full
+                  ${tx.status === 'pending' ? 'bg-yellow-500 text-yellow-900' : 
+                    tx.status === 'submitted' ? 'bg-blue-500 text-blue-900' : 
+                    'bg-slate-500 text-slate-900'}
+                `}>
+                  {tx.status}
+                </div>
+              </div>
+              
+              <div className="text-sm mb-1">
+                {tx.status === 'pending' && 'Waiting for wallet signature...'}
+                {tx.status === 'submitted' && 'Transaction submitted to blockchain...'}
                       </div>
                       
                       <div className="text-xs text-slate-400 mb-1">
@@ -328,7 +328,7 @@ export default function TransactionMonitor() {
                       )}
                     </div>
                   ))}
-                </div>
+              </div>
               )}
               
               {/* Show completed transactions */}
@@ -341,7 +341,7 @@ export default function TransactionMonitor() {
                   {completedTransactions.map(tx => (
                     <div key={tx.id} className="mb-3 last:mb-0 bg-slate-700 p-2 rounded opacity-80">
                       <div className="flex justify-between items-center mb-1">
-                        <div className="text-xs text-slate-400">
+              <div className="text-xs text-slate-400">
                           {new Date(tx.timestamp || Date.now()).toLocaleTimeString()}
                         </div>
                         <div className={`
@@ -356,8 +356,8 @@ export default function TransactionMonitor() {
                       </div>
                       
                       <div className="text-xs text-slate-400 mb-1">
-                        To: {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
-                      </div>
+                To: {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
+              </div>
                       
                       {/* Display transaction hash with link when available */}
                       {tx.hash && (
@@ -373,9 +373,9 @@ export default function TransactionMonitor() {
                           </a>
                         </div>
                       )}
-                    </div>
-                  ))}
-                </div>
+            </div>
+          ))}
+        </div>
               )}
             </div>
           )}
