@@ -1,6 +1,7 @@
 import { apiUrl } from '../config';
 import { createPublicClient, http, createWalletClient, custom } from 'viem';
 import { celo } from 'viem/chains';
+import { base, arbitrum } from "viem/chains";
 import { 
   CELO_CHAIN_HEX, 
   CELO_NETWORK_PARAMS,
@@ -24,6 +25,7 @@ export interface PendingTransaction {
     requiresSignature: boolean;
     dataSize: number;
     dataType: string;
+    chain?: 'celo' | 'base' | 'arbitrum';
   };
 }
 
@@ -41,6 +43,52 @@ export class TransactionError extends Error {
     this.transaction = transaction;
   }
 }
+
+// Add Base and Arbitrum chain constants
+export const BASE_CHAIN_ID = 8453;
+export const BASE_CHAIN_HEX = `0x${BASE_CHAIN_ID.toString(16)}`;
+export const ARBITRUM_CHAIN_ID = 42161;
+export const ARBITRUM_CHAIN_HEX = `0x${ARBITRUM_CHAIN_ID.toString(16)}`;
+
+// Base RPC URLs in priority order
+export const BASE_RPC_URLS = [
+  'https://mainnet.base.org',
+  'https://base-mainnet.public.blastapi.io',
+  'https://base.meowrpc.com'
+];
+
+// Arbitrum RPC URLs in priority order
+export const ARBITRUM_RPC_URLS = [
+  'https://arb1.arbitrum.io/rpc',
+  'https://arbitrum-one.public.blastapi.io',
+  'https://arbitrum.meowrpc.com'
+];
+
+// Network parameters for wallet addition
+export const BASE_NETWORK_PARAMS = {
+  chainId: BASE_CHAIN_HEX,
+  chainName: 'Base Mainnet',
+  nativeCurrency: {
+    name: 'ETH',
+    symbol: 'ETH',
+    decimals: 18
+  },
+  rpcUrls: BASE_RPC_URLS,
+  blockExplorerUrls: ['https://basescan.org/']
+};
+
+// Network parameters for wallet addition
+export const ARBITRUM_NETWORK_PARAMS = {
+  chainId: ARBITRUM_CHAIN_HEX,
+  chainName: 'Arbitrum One',
+  nativeCurrency: {
+    name: 'ETH',
+    symbol: 'ETH',
+    decimals: 18
+  },
+  rpcUrls: ARBITRUM_RPC_URLS,
+  blockExplorerUrls: ['https://arbiscan.io/']
+};
 
 /**
  * Fetch pending transactions from the backend
@@ -115,31 +163,61 @@ export const updateTransactionStatus = async (
 };
 
 /**
- * Switch the wallet chain to Celo if needed
- * @param provider The provider from the wallet
- * @returns Boolean indicating whether chain was already Celo or successfully switched
+ * Switch to a specific chain based on the chain parameter
  */
-export const switchToCeloChain = async (provider: any): Promise<boolean> => {
+export const switchToChain = async (provider: any, chain: 'celo' | 'base' | 'arbitrum'): Promise<boolean> => {
   try {
     // Get current chain ID
     const currentChainId = await provider.request({ method: 'eth_chainId' });
     
-    // Check if already on Celo
-    if (currentChainId === CELO_CHAIN_HEX) {
-      console.log('Already on Celo network');
+    let targetChainHex: string;
+    let targetChainName: string;
+    let networkParams: any;
+    
+    if (chain === 'celo') {
+      targetChainHex = CELO_CHAIN_HEX;
+      targetChainName = 'Celo';
+      networkParams = CELO_NETWORK_PARAMS;
+      
+      // Check if already on target chain
+      if (currentChainId === targetChainHex) {
+        console.log(`Already on ${targetChainName} network`);
+        return true;
+      }
+    } else if (chain === 'base') {
+      targetChainHex = BASE_CHAIN_HEX;
+      targetChainName = 'Base';
+      networkParams = BASE_NETWORK_PARAMS;
+      
+      // Check if already on target chain
+      if (currentChainId === targetChainHex) {
+        console.log(`Already on ${targetChainName} network`);
+        return true;
+      }
+    } else if (chain === 'arbitrum') {
+      targetChainHex = ARBITRUM_CHAIN_HEX;
+      targetChainName = 'Arbitrum';
+      networkParams = ARBITRUM_NETWORK_PARAMS;
+      
+      // Check if already on target chain
+      if (currentChainId === targetChainHex) {
+        console.log(`Already on ${targetChainName} network`);
       return true;
+      }
+    } else {
+      throw new Error(`Unsupported chain: ${chain}`);
     }
     
-    console.log(`Need to switch chains from ${currentChainId} to Celo (${CELO_CHAIN_HEX})`);
+    console.log(`Need to switch chains from ${currentChainId} to ${targetChainName} (${targetChainHex})`);
     
-    // Try to switch to Celo chain
+    // Try to switch to target chain
     try {
       // First try the standard wallet_switchEthereumChain method
       await provider.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: CELO_CHAIN_HEX }]
+        params: [{ chainId: targetChainHex }]
       });
-      console.log('Successfully switched to Celo chain');
+      console.log(`Successfully switched to ${targetChainName} chain`);
       return true;
     } catch (switchError: any) {
       // Chain doesn't exist yet in wallet
@@ -149,22 +227,22 @@ export const switchToCeloChain = async (provider: any): Promise<boolean> => {
           // Try to add the chain to the wallet
           await provider.request({
             method: 'wallet_addEthereumChain',
-            params: [CELO_NETWORK_PARAMS]
+            params: [networkParams]
           });
-          console.log('Successfully added and switched to Celo chain');
+          console.log(`Successfully added and switched to ${targetChainName} chain`);
           return true;
         } catch (addError) {
-          console.error('Failed to add Celo chain to wallet:', addError);
+          console.error(`Failed to add ${targetChainName} chain to wallet:`, addError);
           throw new TransactionError(
-            'Failed to add Celo network to wallet. Please add it manually.',
+            `Failed to add ${targetChainName} network to wallet. Please add it manually.`,
             NetworkErrorType.CHAIN_ADD_FAILED,
             addError instanceof Error ? addError.message : 'Unknown error'
           );
         }
       } else {
-        console.error('Failed to switch to Celo chain:', switchError);
+        console.error(`Failed to switch to ${targetChainName} chain:`, switchError);
         throw new TransactionError(
-          'Failed to switch to Celo network. Please switch manually in your wallet.',
+          `Failed to switch to ${targetChainName} network. Please switch manually in your wallet.`,
           NetworkErrorType.NETWORK_SWITCH_FAILED,
           switchError.message || 'Unknown error'
         );
@@ -177,11 +255,16 @@ export const switchToCeloChain = async (provider: any): Promise<boolean> => {
     
     console.error('Error during chain switching:', error);
     throw new TransactionError(
-      'Error switching to Celo network',
+      `Error switching to ${chain} network`,
       NetworkErrorType.CONNECTION_FAILED,
       error instanceof Error ? error.message : 'Unknown error'
     );
   }
+};
+
+// Preserve the old function for backward compatibility
+export const switchToCeloChain = async (provider: any): Promise<boolean> => {
+  return switchToChain(provider, 'celo');
 };
 
 /**
@@ -216,15 +299,63 @@ export const executeTransaction = async (
                     walletClient.provider;
     
     if (provider) {
-      // Try to switch to Celo chain before executing transaction
+      // Determine which chain to use based on the transaction
+      let targetChain: 'celo' | 'base' | 'arbitrum' = 'celo'; // Default to Celo for backward compatibility
+      
+      // Check transaction metadata or destination address to determine chain
+      if (transaction.metadata?.chain) {
+        // If the transaction metadata specifies a chain, use that
+        targetChain = transaction.metadata.chain as 'celo' | 'base' | 'arbitrum';
+      } else {
+        // Try to determine chain from the destination address
+        // Base and Arbitrum token addresses we know about
+        const BASE_TOKENS = [
+          "0xa411c9Aa00E020e4f88Bc19996d29c5B7ADB4ACf".toLowerCase(), // XOC on Base
+        ];
+        
+        const ARBITRUM_TOKENS = [
+          "0xF197FFC28c23E0309B5559e7a166f2c6164C80aA".toLowerCase(), // MXNB on Arbitrum
+        ];
+        
+        const toAddressLower = transaction.to.toLowerCase();
+        
+        if (BASE_TOKENS.includes(toAddressLower)) {
+          targetChain = 'base';
+          console.log('Detected Base chain transaction based on token address');
+        } else if (ARBITRUM_TOKENS.includes(toAddressLower)) {
+          targetChain = 'arbitrum';
+          console.log('Detected Arbitrum chain transaction based on token address');
+        }
+        // Otherwise, keep the default of 'celo'
+      }
+      
+      // Try to switch to the correct chain before executing transaction
       try {
-        await switchToCeloChain(provider);
-        // After switching, re-create walletClient with the new chain ID to avoid mismatch errors
+        await switchToChain(provider, targetChain);
+        
+        // After switching, create the appropriate chain client based on the target chain
+        let chain;
+        switch(targetChain) {
+          case 'base':
+            chain = base;
+            break;
+          case 'arbitrum':
+            chain = arbitrum;
+            break;
+          case 'celo':
+          default:
+            chain = celo;
+            break;
+        }
+        
+        // Re-create walletClient with the new chain ID to avoid mismatch errors
         walletClient = createWalletClient({
           account: walletClient.account,
-          chain: celo,
+          chain: chain,
           transport: custom(provider)
         });
+        
+        console.log(`Successfully switched to ${targetChain} chain and recreated wallet client`);
       } catch (switchError) {
         if (switchError instanceof TransactionError) {
           throw switchError;
@@ -371,16 +502,45 @@ export const createPrivyWalletClient = async (wallet: any) => {
     try {
       const chainId = await provider.request({ method: 'eth_chainId' });
       console.log('Provider test successful. Chain ID:', chainId);
+      
+      // Determine which chain the wallet is currently on
+      let currentChain;
+      if (chainId === BASE_CHAIN_HEX) {
+        currentChain = base;
+        console.log('Wallet is on Base chain');
+      } else if (chainId === ARBITRUM_CHAIN_HEX) {
+        currentChain = arbitrum;
+        console.log('Wallet is on Arbitrum chain');
+      } else if (chainId === CELO_CHAIN_HEX) {
+        currentChain = celo;
+        console.log('Wallet is on Celo chain');
+      } else {
+        // Default to Base if not on a known chain
+        currentChain = base;
+        console.log(`Wallet is on unknown chain ${chainId}, defaulting to Base`);
+      }
+      
+      // Create wallet client with transport to the wallet's provider and use the detected chain
+      console.log(`Creating walletClient for chain: ${currentChain.name}`);
+      const walletClient = createWalletClient({
+        account: wallet.address as `0x${string}`,
+        chain: currentChain,
+        transport: custom(provider)
+      });
+      
+      return walletClient;
+      
     } catch (e) {
       console.error('Provider test failed:', e);
-      // Continue anyway, as some providers might restrict certain methods
+      // Continue anyway with Base as the default chain
+      console.log('Creating walletClient with Base as default chain due to provider test failure');
     }
     
     // Create wallet client with transport to the wallet's provider
     console.log('Creating walletClient with custom transport');
     const walletClient = createWalletClient({
       account: wallet.address as `0x${string}`,
-      chain: celo,
+      chain: base, // Default to Base instead of Celo
       transport: custom(provider)
     });
     

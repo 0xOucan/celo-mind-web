@@ -8,7 +8,9 @@ import {
   createPrivyWalletClient,
   updateTransactionStatus,
   PendingTransaction,
-  switchToCeloChain
+  switchToCeloChain,
+  switchToChain,
+  executeTransaction
 } from '../services/transactionService';
 
 // Polling interval for checking pending transactions
@@ -39,14 +41,41 @@ export default function TransactionMonitor() {
     return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
   };
 
-  // Get Celoscan link for a transaction
-  const getCeloscanLink = (hash: string | undefined): string => {
-    if (!hash) return '#';
-    return `https://celoscan.io/tx/${hash}`;
+  // Get blockchain explorer link for a transaction
+  const getExplorerLink = (tx: PendingTransaction): string => {
+    if (!tx.hash) return '#';
+    
+    // Determine which explorer to use based on chain
+    const chain = tx.metadata?.chain || 'celo';
+    
+    switch(chain) {
+      case 'base':
+        return `https://basescan.org/tx/${tx.hash}`;
+      case 'arbitrum':
+        return `https://arbiscan.io/tx/${tx.hash}`;
+      case 'celo':
+      default:
+        return `https://celoscan.io/tx/${tx.hash}`;
+    }
   };
 
-  // Switch to Celo network if needed
-  const ensureCorrectNetwork = async () => {
+  // Get explorer name based on chain
+  const getExplorerName = (tx: PendingTransaction): string => {
+    const chain = tx.metadata?.chain || 'celo';
+    
+    switch(chain) {
+      case 'base':
+        return 'Basescan';
+      case 'arbitrum':
+        return 'Arbiscan';
+      case 'celo':
+      default:
+        return 'Celoscan';
+    }
+  };
+
+  // Switch to the correct network based on the transaction's chain
+  const ensureCorrectNetwork = async (transaction?: PendingTransaction) => {
     if (!isConnected) return;
     
     try {
@@ -54,16 +83,24 @@ export default function TransactionMonitor() {
       const wallet = getPrimaryWallet();
       if (!wallet) return;
       
+      // Determine which chain to use
+      let targetChain: 'celo' | 'base' | 'arbitrum' = 'celo'; // Default to Celo
+      
+      if (transaction?.metadata?.chain) {
+        // Use the chain from transaction metadata if available
+        targetChain = transaction.metadata.chain;
+      }
+      
       try {
         const provider = await wallet.getEthereumProvider();
         if (provider) {
-          await switchToCeloChain(provider);
-          console.log('Network verified for Celo transactions');
+          await switchToChain(provider, targetChain);
+          console.log(`Network verified for ${targetChain.toUpperCase()} transactions`);
         } else {
           console.warn('Could not get provider to switch networks');
         }
       } catch (error) {
-        console.error('Error switching to Celo network:', error);
+        console.error(`Error switching to ${targetChain} network:`, error);
         const errMsg = error instanceof Error ? error.message : 'Unknown error switching networks';
         setNetworkError(`Network Error: ${errMsg}`);
       }
@@ -86,8 +123,12 @@ export default function TransactionMonitor() {
         // Force the UI to be visible when new transactions arrive
         setForceVisible(true);
         setIsMinimized(false);
-        // Try to switch to Celo network whenever new transactions arrive
-        ensureCorrectNetwork();
+        
+        // Try to switch to the right network for the newest transaction
+        if (transactions.length > 0) {
+          const newestTransaction = transactions[transactions.length - 1];
+          ensureCorrectNetwork(newestTransaction);
+        }
       }
       
       // Move completed transactions to completedTransactions
@@ -149,6 +190,18 @@ export default function TransactionMonitor() {
       }
       
       console.log('👛 Creating wallet client for connected wallet:', connectedAddress);
+      
+      try {
+        // Get provider to check current chain before creating wallet client
+        const provider = await wallet.getEthereumProvider();
+        if (provider) {
+          const chainId = await provider.request({ method: 'eth_chainId' });
+          console.log('Wallet currently on chain ID:', chainId);
+        }
+      } catch (e) {
+        console.error('Error checking current chain:', e);
+      }
+      
       const walletClient = await createPrivyWalletClient(wallet);
       
       if (!walletClient) {
@@ -159,14 +212,45 @@ export default function TransactionMonitor() {
       console.log('🚀 Wallet client created successfully, processing pending transactions...');
       
       try {
-        await processPendingTransactions(walletClient);
+        // Get pending transactions
+        const pendingTxs = await getPendingTransactions();
+        console.log('Pending transactions to process:', pendingTxs.length);
+        
+        if (pendingTxs.length === 0) {
+          console.log('No pending transactions to process');
+          return;
+        }
+        
+        // Process only one transaction at a time to ensure proper wallet interaction
+        for (const tx of pendingTxs) {
+          if (tx.status === 'pending') {
+            console.log(`Processing transaction ${tx.id} targeting chain ${tx.metadata?.chain || 'unknown'}`);
+            console.log(`Transaction details: to=${tx.to}, value=${tx.value}, data=${tx.data ? tx.data.substring(0, 20) + '...' : 'none'}`);
+            
+            // Ensure we're on the right network for this transaction
+            await ensureCorrectNetwork(tx);
+            
+            // Execute this specific transaction
+            try {
+              const hash = await executeTransaction(tx, walletClient);
+              console.log(`✅ Transaction executed with hash: ${hash}`);
+              // Only process one transaction, then break
+              break;
+            } catch (txError) {
+              console.error(`Failed to execute transaction ${tx.id}:`, txError);
+              // Continue to next transaction if this one fails
+              continue;
+            }
+          }
+        }
+        
         setLastProcessed(new Date());
       } catch (error) {
         console.error('Error processing transactions:', error);
         const errMsg = error instanceof Error ? error.message : 'Unknown error processing transactions';
         
         // Handle network-related errors
-        if (errMsg.includes('network') || errMsg.includes('chain') || errMsg.includes('Celo')) {
+        if (errMsg.includes('network') || errMsg.includes('chain')) {
           setNetworkError(`Network Error: ${errMsg}`);
         }
       }
@@ -270,10 +354,33 @@ export default function TransactionMonitor() {
           <div className="font-medium mb-1">Network Error</div>
           <div className="text-sm text-red-200 mb-2">{networkError.replace('Network Error: ', '')}</div>
           <button 
-            onClick={ensureCorrectNetwork}
+            onClick={async () => {
+              // Check if there are pending transactions
+              const pendingTxs = await getPendingTransactions();
+              
+              // Find the first pending transaction to determine which network to switch to
+              const firstPendingTx = pendingTxs.find(tx => tx.status === 'pending');
+              
+              if (firstPendingTx) {
+                ensureCorrectNetwork(firstPendingTx);
+              } else {
+                // Default to Base if no transactions pending
+                const wallet = getPrimaryWallet();
+                if (wallet) {
+                  try {
+                    const provider = await wallet.getEthereumProvider();
+                    if (provider) {
+                      await switchToChain(provider, 'base');
+                    }
+                  } catch (error) {
+                    console.error('Error switching to Base:', error);
+                  }
+                }
+              }
+            }}
             className="bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
           >
-            Switch to Celo
+            Switch Network
           </button>
         </div>
       )}
@@ -316,13 +423,13 @@ export default function TransactionMonitor() {
                       {tx.hash && (
                         <div className="text-xs mt-1">
                           <a 
-                            href={getCeloscanLink(tx.hash)} 
+                            href={getExplorerLink(tx)} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-blue-400 hover:text-blue-300 flex items-center"
                           >
                             <span className="mr-1">🔍</span>
-                            <span className="underline">View on Celoscan: {formatTxHash(tx.hash)}</span>
+                            <span className="underline">{getExplorerName(tx)}: {formatTxHash(tx.hash)}</span>
                           </a>
                         </div>
                       )}
@@ -363,13 +470,13 @@ export default function TransactionMonitor() {
                       {tx.hash && (
                         <div className="text-xs">
                           <a 
-                            href={getCeloscanLink(tx.hash)} 
+                            href={getExplorerLink(tx)} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-blue-400 hover:text-blue-300 flex items-center"
                           >
                             <span className="mr-1">🔍</span>
-                            <span className="underline">View on Celoscan: {formatTxHash(tx.hash)}</span>
+                            <span className="underline">{getExplorerName(tx)}: {formatTxHash(tx.hash)}</span>
                           </a>
                         </div>
                       )}
