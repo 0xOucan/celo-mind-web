@@ -1,13 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { SendIcon, LoadingIcon } from './Icons';
+import { SendIcon, LoadingIcon, SkullIcon, FireIcon } from './Icons';
 import { apiUrl } from '../config';
-import { sendChatMessage, AgentResponseType, ParsedAgentResponse } from '../services/agentService';
+import { sendChatMessage, AgentResponseType, ParsedAgentResponse as ImportedAgentResponse } from '../services/agentService';
 import { useWallet } from '../providers/WalletContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { getPendingTransactions, PendingTransaction } from '../services/transactionService';
+
+// Define an interface that extends ImportedAgentResponse with the additional fields we need
+interface EnhancedAgentResponse extends ImportedAgentResponse {
+  text?: string;
+}
 
 interface Message {
   id: string;
@@ -17,6 +22,15 @@ interface Message {
   type?: AgentResponseType;
   requiresAction?: boolean;
   data?: any;
+}
+
+// Update the interface to match the updated API
+export interface ParsedAgentResponse {
+  type: AgentResponseType;
+  message?: string;
+  text?: string;
+  data?: any;
+  rawResponse?: string;
 }
 
 // Component to dynamically update transaction links when they are confirmed
@@ -51,11 +65,11 @@ const TransactionLink = ({ txId }: { txId: string }) => {
   }, [txId]);
 
   if (isLoading) {
-    return <span className="text-blue-400">Loading transaction status...</span>;
+    return <span className="text-mictlai-turquoise font-pixel">LOADING TRANSACTION...</span>;
   }
 
   if (!transaction) {
-    return <span className="text-blue-400">Check transaction panel for updates</span>;
+    return <span className="text-mictlai-turquoise font-pixel">CHECK TRANSACTION PANEL</span>;
   }
 
   if (transaction.status === 'confirmed' && transaction.hash) {
@@ -89,30 +103,30 @@ const TransactionLink = ({ txId }: { txId: string }) => {
         href={explorerUrl} 
         target="_blank" 
         rel="noopener noreferrer" 
-        className="text-blue-400 hover:underline"
+        className="text-mictlai-turquoise hover:text-mictlai-gold border-b border-mictlai-turquoise hover:border-mictlai-gold font-pixel"
       >
-        View on {explorerName}: {transaction.hash.substring(0, 6)}...{transaction.hash.substring(transaction.hash.length - 4)}
+        VIEW ON {explorerName}: {transaction.hash.substring(0, 6)}...{transaction.hash.substring(transaction.hash.length - 4)}
       </a>
     );
   }
 
   if (transaction.status === 'pending') {
-    return <span className="text-yellow-400">Waiting for wallet signature...</span>;
+    return <span className="text-mictlai-gold font-pixel pixel-pulse">WAITING FOR WALLET SIGNATURE...</span>;
   }
   
   if (transaction.status === 'submitted') {
-    return <span className="text-blue-400">Transaction submitted, waiting for confirmation...</span>;
+    return <span className="text-mictlai-turquoise font-pixel pixel-pulse">TRANSACTION SUBMITTED, WAITING FOR CONFIRMATION...</span>;
   }
 
   if (transaction.status === 'rejected') {
-    return <span className="text-red-400">Transaction rejected by user</span>;
+    return <span className="text-mictlai-blood font-pixel">TRANSACTION REJECTED BY USER</span>;
   }
 
   if (transaction.status === 'failed') {
-    return <span className="text-red-400">Transaction failed</span>;
+    return <span className="text-mictlai-blood font-pixel">TRANSACTION FAILED</span>;
   }
 
-  return <span className="text-blue-400">Check transaction panel for latest status</span>;
+  return <span className="text-mictlai-turquoise font-pixel">CHECK TRANSACTION PANEL FOR STATUS</span>;
 };
 
 // Component to render message content with clickable links and transaction UI
@@ -156,7 +170,7 @@ const MessageDisplay = ({ message }: { message: Message }) => {
     // Replace any remaining Celoscan links with a cleaner format
     const celoscanRegex = /https:\/\/celoscan\.io\/tx\/([a-zA-Z0-9]+)/g;
     processed = processed.replace(celoscanRegex, (match, txHash) => {
-      return `<a href="${match}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">View on Celoscan (${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 4)})</a>`;
+      return `<a href="${match}" target="_blank" rel="noopener noreferrer" class="text-mictlai-turquoise hover:text-mictlai-gold border-b border-mictlai-turquoise hover:border-mictlai-gold font-pixel">${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 4)}</a>`;
     });
     
     // Process Markdown-style links [text](url)
@@ -164,12 +178,12 @@ const MessageDisplay = ({ message }: { message: Message }) => {
     processed = processed.replace(markdownLinkRegex, (match, text, url) => {
         // Remove any trailing punctuation from the URL
         const cleanUrl = url.replace(/[,.)]$/, '');
-        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">${text}</a>`;
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-mictlai-turquoise hover:text-mictlai-gold border-b border-mictlai-turquoise hover:border-mictlai-gold font-pixel">${text}</a>`;
       });
     
     // Process plain URLs that aren't already in HTML tags
     const urlRegex = /(?<!href="|">)(https?:\/\/[^\s),.]+)/g;
-    processed = processed.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$&</a>');
+    processed = processed.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer" class="text-mictlai-turquoise hover:text-mictlai-gold border-b border-mictlai-turquoise hover:border-mictlai-gold font-pixel">$&</a>');
     
     return processed;
   };
@@ -196,13 +210,13 @@ const MessageDisplay = ({ message }: { message: Message }) => {
     if (message.type === AgentResponseType.TRANSACTION || message.type === AgentResponseType.APPROVAL) {
       return (
         <div>
-          <div className="whitespace-pre-wrap">{contentWithTxLink}</div>
-          <div className="mt-2 p-2 border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-600">
-            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-              This operation requires a wallet transaction. Please check your wallet extension for a signature request.
+          <div className="whitespace-pre-wrap font-pixel">{contentWithTxLink}</div>
+          <div className="mt-2 p-2 border-l-3 border-mictlai-gold bg-black border border-mictlai-gold/30 shadow-pixel">
+            <p className="text-sm font-pixel text-mictlai-gold">
+              THIS OPERATION REQUIRES A WALLET TRANSACTION. CHECK YOUR WALLET FOR A SIGNATURE REQUEST.
             </p>
-            <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-              You can monitor the status of your transaction in the Transaction panel at the bottom right.
+            <p className="text-xs text-mictlai-bone/70 font-pixel mt-1">
+              MONITOR TRANSACTION STATUS IN THE PANEL AT BOTTOM RIGHT.
             </p>
           </div>
         </div>
@@ -213,10 +227,10 @@ const MessageDisplay = ({ message }: { message: Message }) => {
     if (content.includes('selling order') && content.includes('cUSD') && content.includes('iAmigo P2P')) {
       return (
         <div>
-          <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processedContent }} />
-          <div className="mt-2 p-2 border-l-4 border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-600">
-            <p className="text-sm font-medium text-green-800 dark:text-green-300">
-              Your transaction is being processed. Check the transaction panel at the bottom right for status and Celoscan link.
+          <div className="whitespace-pre-wrap font-pixel" dangerouslySetInnerHTML={{ __html: processedContent }} />
+          <div className="mt-2 p-2 border-l-3 border-mictlai-turquoise bg-black border border-mictlai-turquoise/30 shadow-pixel">
+            <p className="text-sm font-pixel text-mictlai-turquoise">
+              YOUR TRANSACTION IS BEING PROCESSED. CHECK TRANSACTION PANEL FOR STATUS AND LINK.
             </p>
           </div>
         </div>
@@ -227,267 +241,327 @@ const MessageDisplay = ({ message }: { message: Message }) => {
     if (content.includes('buying order') && content.includes('QR') && (content.includes('OXXO') || content.includes('MXN'))) {
       return (
         <div>
-          <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processedContent }} />
-          <div className="mt-2 p-2 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-600">
-            <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
-              Buying order has been processed. The funds have been transferred from escrow to the buyer's wallet.
+          <div className="whitespace-pre-wrap font-pixel" dangerouslySetInnerHTML={{ __html: processedContent }} />
+          <div className="mt-2 p-2 border-l-3 border-mictlai-turquoise bg-black border border-mictlai-turquoise/30 shadow-pixel">
+            <p className="text-sm font-pixel text-mictlai-turquoise">
+              BUYING ORDER PROCESSED. FUNDS TRANSFERRED FROM ESCROW TO BUYER'S WALLET.
             </p>
           </div>
         </div>
       );
     }
     
-    return <div className="whitespace-pre-wrap">{contentWithTxLink}</div>;
+    return <div className="whitespace-pre-wrap font-pixel">{contentWithTxLink}</div>;
   }
   
   // Add special UI for transaction messages
   if (message.type === AgentResponseType.TRANSACTION || message.type === AgentResponseType.APPROVAL) {
     return (
       <div>
-        <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processedContent }} />
-        <div className="mt-2 p-2 border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-600">
-          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-            This operation requires a wallet transaction. Please check your wallet extension for a signature request.
-          </p>
-          <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-            You can monitor the status of your transaction in the Transaction panel at the bottom right.
+        <div className="whitespace-pre-wrap font-pixel" dangerouslySetInnerHTML={{ __html: processedContent }} />
+        <div className="mt-2 p-2 border-l-3 border-mictlai-gold bg-black border border-mictlai-gold/30 shadow-pixel">
+          <p className="text-sm font-pixel text-mictlai-gold">
+            THIS OPERATION REQUIRES A WALLET TRANSACTION. CHECK YOUR WALLET FOR A SIGNATURE REQUEST.
           </p>
         </div>
       </div>
     );
   }
-  
-  // Enhanced rendering for cUSD escrow messages 
-  if (content.includes('selling order') && content.includes('cUSD') && content.includes('iAmigo P2P')) {
-    return (
-      <div>
-        <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processedContent }} />
-        <div className="mt-2 p-2 border-l-4 border-green-500 bg-green-50 dark:bg-green-900/20 dark:border-green-600">
-          <p className="text-sm font-medium text-green-800 dark:text-green-300">
-            Your transaction is being processed. Check the transaction panel at the bottom right for status and Celoscan link.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Enhanced rendering for buying order messages
-  if (content.includes('buying order') && content.includes('QR') && (content.includes('OXXO') || content.includes('MXN'))) {
-    return (
-      <div>
-        <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processedContent }} />
-        <div className="mt-2 p-2 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-600">
-          <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
-            Buying order has been processed. The funds have been transferred from escrow to the buyer's wallet.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Use dangerouslySetInnerHTML for all link rendering to avoid mixing approaches
-  return <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processedContent }} />;
+
+  return <div className="whitespace-pre-wrap font-pixel" dangerouslySetInnerHTML={{ __html: processedContent }} />;
 };
 
+// Component to render a chat message
+const Message = ({ message }: { message: Message }) => {
+  const isAgent = message.sender === 'agent';
+
+  return (
+    <div className={`mb-4 ${isAgent ? '' : 'flex justify-end'}`}>
+      <div className={`
+        inline-block max-w-[85%] lg:max-w-[75%] pb-2 
+        ${isAgent 
+          ? 'bg-black border-3 border-mictlai-gold/50 shadow-pixel text-mictlai-bone px-4 pt-3' 
+          : 'bg-mictlai-gold/20 border-3 border-mictlai-gold shadow-pixel text-mictlai-gold px-4 pt-3'}
+      `}>
+        {/* User icon and message */}
+        <div className="flex items-start">
+          {isAgent && (
+            <div className="mr-2 mt-1">
+              <SkullIcon className="w-6 h-6 text-mictlai-gold" />
+            </div>
+          )}
+          <div className="flex-1">
+            <div className="font-pixel text-sm mb-1">
+              {isAgent ? (
+                <span className="text-mictlai-gold">MICTLAI</span>
+              ) : (
+                <span className="text-mictlai-turquoise">YOU</span>
+              )}
+              <span className="text-mictlai-bone/50 text-xs ml-2">
+                {new Date(message.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
+            
+            <div className={`${isAgent ? 'text-mictlai-bone' : 'text-mictlai-gold'} text-sm`}>
+              <MessageDisplay message={message} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ChatInterface component
 export default function ChatInterface() {
-  const { connectedAddress, isConnected } = useWallet();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [isWaiting, setIsWaiting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
+  const { connectedAddress, isConnected } = useWallet();
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const lastAgentMessageIdRef = useRef<string | null>(null);
+  
+  // Scroll to bottom of chat when new messages are added
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   };
-
+  
+  // Add welcome message on mount
+  useEffect(() => {
+    // Initialize with a system welcome message
+    const welcomeMessage: Message = {
+      id: `system-welcome-${Date.now()}`,
+      content: "Welcome to MictlAI! I can help you bridge tokens between networks. How can I assist you today?",
+      sender: 'agent',
+      timestamp: Date.now(),
+    };
+    setMessages([welcomeMessage]);
+  }, []);
+  
+  // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // Add initial welcome message
-  useEffect(() => {
-    if (messages.length === 0) {
-      setMessages([
-        {
-          id: 'welcome',
-          type: AgentResponseType.INFO,
-          content: "Hello! 👋 I'm MictlAI, your AI-powered cross-chain bridge assistant for Base, Arbitrum, Mantle, and zkSync Era networks. How can I help you today? You can ask me to check your balances, perform swaps, or explain how cross-chain bridging works!",
-          timestamp: Date.now(),
-          sender: 'agent'
-        }
-      ]);
-    }
-  }, []);
-
+  
+  // Send a message to the agent and handle the response
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!input.trim()) return;
+    // Don't do anything if input is empty or we're already waiting for a response
+    if (!inputValue.trim() || isWaiting) return;
     
-    // Check if wallet is connected before allowing DeFi operations
-    if (!isConnected && 
-        (input.toLowerCase().includes('swap') || 
-         input.toLowerCase().includes('aave') || 
-         input.toLowerCase().includes('ichi') || 
-         input.toLowerCase().includes('approve'))) {
-      
-      setMessages(prev => [...prev, {
-        id: `error-${Date.now()}`,
-        content: "Please connect your wallet first to perform DeFi operations.",
+    // Check if wallet is connected
+    if (!isConnected) {
+      const errorMessage: Message = {
+        id: `system-error-${Date.now()}`,
+        content: "⚠️ Please connect your wallet first to use MictlAI's features.",
         sender: 'agent',
         timestamp: Date.now(),
-        type: AgentResponseType.ERROR
-      }]);
+      };
+      setMessages(prev => [...prev, errorMessage]);
       return;
     }
     
+    // Add user message to chat
     const userMessage: Message = {
       id: `user-${Date.now()}`,
-      content: input,
+      content: inputValue,
       sender: 'user',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
     
     setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
+    setInputValue('');
+    setIsWaiting(true);
+    
+    // Immediate typing indicator
+    const typingIndicatorId = `agent-typing-${Date.now()}`;
+    const typingIndicator: Message = {
+      id: typingIndicatorId,
+      content: "Thinking...",
+      sender: 'agent',
+      timestamp: Date.now(),
+    };
+    
+    setMessages(prev => [...prev, typingIndicator]);
     
     try {
-      const response = await sendChatMessage(input);
+      // Send message to backend
+      const response = await sendChatMessage(inputValue);
       
-      const agentMessage: Message = {
-        id: `agent-${Date.now()}`,
-        content: response.message,
-        sender: 'agent',
-        timestamp: Date.now(),
-        type: response.type,
-        data: response.data
-      };
-      
-      // Add explanatory note for transaction requests
-      if (response.type === AgentResponseType.TRANSACTION) {
-        const enhancedMessage = `${response.message}\n\n*This transaction requires your wallet to sign it. If you approve, your wallet should prompt you to sign the transaction.*`;
+      if (response) {
+        // Remove typing indicator
+        setMessages(prev => prev.filter(m => m.id !== typingIndicatorId));
         
-        agentMessage.content = enhancedMessage;
+        // Add agent response to chat
+        const agentMessage: Message = {
+          id: `agent-${Date.now()}`,
+          content: response.message || "I'm sorry, I couldn't process that request.",
+          sender: 'agent',
+          timestamp: Date.now(),
+          type: response.type,
+          data: response.data,
+        };
+        
+        setMessages(prev => [...prev, agentMessage]);
+        lastAgentMessageIdRef.current = agentMessage.id;
+      } else {
+        // Remove typing indicator and show error
+        setMessages(prev => prev.filter(m => m.id !== typingIndicatorId));
+        
+        const errorMessage: Message = {
+          id: `agent-error-${Date.now()}`,
+          content: "I'm sorry, I'm having trouble connecting to my backend services. Please try again later.",
+          sender: 'agent',
+          timestamp: Date.now(),
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
       }
-      
-      setMessages(prev => [...prev, agentMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
       
-      setMessages(prev => [...prev, {
-        id: `error-${Date.now()}`,
-        content: error instanceof Error ? error.message : 'An unknown error occurred',
+      // Remove typing indicator and show error
+      setMessages(prev => prev.filter(m => m.id !== typingIndicatorId));
+      
+      const errorMessage: Message = {
+        id: `agent-error-${Date.now()}`,
+        content: `I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
         sender: 'agent',
         timestamp: Date.now(),
-        type: AgentResponseType.ERROR
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  // Function to automatically check transaction status
-  const sendStatusCheck = async () => {
-    try {
-      setIsLoading(true);
-      const statusMessage = "What's the status of my transaction?";
-      
-      const userMessage: Message = {
-        id: `user-${Date.now()}`,
-        content: statusMessage,
-        sender: 'user',
-        timestamp: Date.now()
       };
       
-      setMessages(prev => [...prev, userMessage]);
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsWaiting(false);
+    }
+  };
+
+  // Implement a status check for transaction processing
+  const sendStatusCheck = async () => {
+    if (isWaiting) return;
+    
+    setIsWaiting(true);
+    
+    // Add a status checking message
+    const statusMessage: Message = {
+      id: `user-${Date.now()}`,
+      content: "Check my transaction status",
+      sender: 'user',
+      timestamp: Date.now(),
+    };
+    
+    setMessages(prev => [...prev, statusMessage]);
+    
+    // Immediate typing indicator
+    const typingIndicatorId = `agent-typing-${Date.now()}`;
+    const typingIndicator: Message = {
+      id: typingIndicatorId,
+      content: "Checking transaction status...",
+      sender: 'agent',
+      timestamp: Date.now(),
+    };
+    
+    setMessages(prev => [...prev, typingIndicator]);
+    
+    try {
+      // Send status check to backend
+      const response = await sendChatMessage("Check my transaction status");
       
-      const response = await sendChatMessage(statusMessage);
+      // Remove typing indicator
+      setMessages(prev => prev.filter(m => m.id !== typingIndicatorId));
       
+      // Add agent response
       const agentMessage: Message = {
         id: `agent-${Date.now()}`,
-        content: response.message,
+        content: response?.message || "I couldn't retrieve your transaction status at this time.",
         sender: 'agent',
         timestamp: Date.now(),
-        type: response.type
+        type: response?.type,
+        data: response?.data,
       };
       
       setMessages(prev => [...prev, agentMessage]);
     } catch (error) {
-      console.error("Failed to check transaction status:", error);
+      console.error('Error checking status:', error);
+      
+      // Remove typing indicator
+      setMessages(prev => prev.filter(m => m.id !== typingIndicatorId));
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: `agent-error-${Date.now()}`,
+        content: "Sorry, I couldn't check your transaction status. Please try again.",
+        sender: 'agent',
+        timestamp: Date.now(),
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      setIsWaiting(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-[600px] bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
-      <div className="p-4 bg-yellow-100 dark:bg-slate-700 border-b border-yellow-200 dark:border-slate-600">
-        <h2 className="text-lg font-bold flex items-center">
-          <span className="mr-2">🤖</span> AI Agent Chat
-          {!isConnected && (
-            <span className="ml-auto text-xs text-red-600 dark:text-red-400 px-2 py-1 rounded bg-red-100 dark:bg-red-900/20">
-              Wallet Not Connected
-            </span>
-          )}
+    <div className="bg-mictlai-obsidian border-3 border-mictlai-gold shadow-pixel-lg h-[600px] max-h-[calc(100vh-250px)] flex flex-col pixel-panel">
+      <div className="p-4 bg-black border-b-3 border-mictlai-gold/70 flex justify-between items-center">
+        <h2 className="text-lg font-bold flex items-center font-pixel text-mictlai-gold">
+          <FireIcon className="w-5 h-5 mr-2 text-mictlai-gold" />
+          MICTLAI BRIDGE CHAT
         </h2>
+        
+        <button 
+          onClick={sendStatusCheck}
+          disabled={isWaiting || !isConnected}
+          className="px-3 py-1.5 border-2 border-mictlai-turquoise/70 text-mictlai-turquoise hover:bg-mictlai-turquoise/20 font-pixel text-xs shadow-pixel disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          CHECK TX STATUS
+        </button>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div 
+        className="flex-1 overflow-y-auto p-4 space-y-2"
+        ref={chatContainerRef}
+      >
         {messages.map((message) => (
-          <div 
-            key={message.id}
-            className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div 
-              className={`max-w-[80%] rounded-xl p-3 ${
-                message.sender === 'user' 
-                  ? 'bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-100' 
-                  : message.type === AgentResponseType.ERROR
-                    ? 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
-                    : message.type === AgentResponseType.SUCCESS
-                      ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
-                      : message.type === AgentResponseType.TRANSACTION || message.type === AgentResponseType.APPROVAL
-                        ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200'
-                        : 'bg-gray-100 dark:bg-slate-700'
-              }`}
-            >
-              <MessageDisplay message={message} />
-              <div className={`text-xs mt-1 ${
-                message.sender === 'user' 
-                  ? 'text-yellow-700 dark:text-yellow-300' 
-                  : 'text-gray-500 dark:text-gray-400'
-              }`}>
-                {new Date(message.timestamp).toLocaleTimeString()}
-              </div>
-            </div>
-          </div>
+          <Message key={message.id} message={message} />
         ))}
         <div ref={messagesEndRef} />
       </div>
       
-      <form onSubmit={sendMessage} className="p-4 border-t border-gray-200 dark:border-slate-700">
-        <div className="flex rounded-lg border border-gray-300 dark:border-slate-600 overflow-hidden">
-          <input
+      <div className="p-4 border-t-3 border-mictlai-gold/50 bg-black">
+        <form onSubmit={sendMessage} className="flex">
+          <input 
             type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message here..."
-            className="flex-1 p-3 bg-white dark:bg-slate-700 focus:outline-none"
-            disabled={isLoading}
+            className="flex-1 bg-mictlai-obsidian text-mictlai-bone border-3 border-mictlai-gold/70 px-4 py-2 shadow-pixel-inner font-pixel"
+            placeholder="ASK MICTLAI ABOUT BRIDGING TOKENS..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            disabled={isWaiting || !isConnected}
           />
-          <button
+          
+          <button 
             type="submit"
-            className="px-4 bg-yellow-400 hover:bg-yellow-500 dark:bg-yellow-600 dark:hover:bg-yellow-700 text-slate-900 transition-colors duration-200"
-            disabled={isLoading}
+            className="pixel-btn ml-2 w-12 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isWaiting || !inputValue.trim() || !isConnected}
           >
-            {isLoading ? <LoadingIcon className="w-5 h-5" /> : <SendIcon className="w-5 h-5" />}
+            {isWaiting ? (
+              <LoadingIcon className="w-5 h-5" />
+            ) : (
+              <SendIcon className="w-5 h-5" />
+            )}
           </button>
-        </div>
-        <div className="p-3 border-t dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-center text-xs text-zinc-500 dark:text-zinc-400">
-          <p>Example commands: <button onClick={() => setInput("check wallet balances")} className="underline">check wallet balances</button> • <button onClick={() => setInput("swap 0.1 XOC to USDT on Mantle")} className="underline">swap 0.1 XOC to USDT on Mantle</button> • <button onClick={() => setInput("transfer 0.1 USDT from zkSync to Base")} className="underline">transfer 0.1 USDT from zkSync to Base</button></p>
-        </div>
-      </form>
+        </form>
+        
+        {!isConnected && (
+          <div className="mt-2 p-2 border-3 border-mictlai-blood bg-black text-center text-mictlai-blood font-pixel text-sm">
+            CONNECT YOUR WALLET TO CHAT WITH MICTLAI
+          </div>
+        )}
+      </div>
     </div>
   );
 } 

@@ -8,17 +8,18 @@ export function SunIcon({ className = 'w-6 h-6' }: IconProps) {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      strokeWidth={1.5} 
-      stroke="currentColor" 
+      viewBox="0 0 16 16"
       className={className}
     >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" 
-      />
+      <rect x="7" y="0" width="2" height="2" fill="currentColor" />
+      <rect x="7" y="14" width="2" height="2" fill="currentColor" />
+      <rect x="0" y="7" width="2" height="2" fill="currentColor" />
+      <rect x="14" y="7" width="2" height="2" fill="currentColor" />
+      <rect x="2" y="2" width="2" height="2" fill="currentColor" />
+      <rect x="12" y="2" width="2" height="2" fill="currentColor" />
+      <rect x="2" y="12" width="2" height="2" fill="currentColor" />
+      <rect x="12" y="12" width="2" height="2" fill="currentColor" />
+      <rect x="5" y="5" width="6" height="6" fill="currentColor" />
     </svg>
   );
 }
@@ -27,17 +28,14 @@ export function MoonIcon({ className = 'w-6 h-6' }: IconProps) {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      strokeWidth={1.5} 
-      stroke="currentColor" 
+      viewBox="0 0 16 16"
       className={className}
     >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" 
-      />
+      <rect x="3" y="2" width="8" height="12" fill="currentColor" />
+      <rect x="2" y="3" width="1" height="10" fill="currentColor" />
+      <rect x="11" y="3" width="1" height="10" fill="currentColor" />
+      <rect x="12" y="4" width="1" height="8" fill="currentColor" />
+      <rect x="13" y="5" width="1" height="6" fill="currentColor" />
     </svg>
   );
 }
@@ -46,17 +44,14 @@ export function HomeIcon({ className = 'w-6 h-6' }: IconProps) {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      strokeWidth={1.5} 
-      stroke="currentColor" 
+      viewBox="0 0 16 16"
       className={className}
     >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" 
-      />
+      <rect x="7" y="1" width="2" height="2" fill="currentColor" />
+      <rect x="5" y="3" width="6" height="2" fill="currentColor" />
+      <rect x="3" y="5" width="10" height="2" fill="currentColor" />
+      <rect x="3" y="7" width="10" height="8" fill="currentColor" />
+      <rect x="5" y="10" width="6" height="5" fill="#0D0D0D" />
     </svg>
   );
 }
@@ -65,17 +60,10 @@ export function SendIcon({ className = 'w-6 h-6' }: IconProps) {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      strokeWidth={1.5} 
-      stroke="currentColor" 
+      viewBox="0 0 16 16"
       className={className}
     >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" 
-      />
+      <polygon points="0,0 16,8 0,16 4,8" fill="currentColor" />
     </svg>
   );
 }
@@ -84,23 +72,17 @@ export function LoadingIcon({ className = 'w-6 h-6 animate-spin' }: IconProps) {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
+      viewBox="0 0 16 16"
       className={className}
     >
-      <circle 
-        className="opacity-25" 
-        cx="12" 
-        cy="12" 
-        r="10" 
-        stroke="currentColor" 
-        strokeWidth="4"
-      />
-      <path 
-        className="opacity-75" 
-        fill="currentColor" 
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
+      <rect x="7" y="0" width="2" height="3" fill="currentColor" />
+      <rect x="13" y="2" width="2" height="3" fill="currentColor" opacity="0.8" />
+      <rect x="14" y="7" width="2" height="3" fill="currentColor" opacity="0.6" />
+      <rect x="13" y="12" width="2" height="3" fill="currentColor" opacity="0.4" />
+      <rect x="7" y="13" width="2" height="3" fill="currentColor" opacity="0.3" />
+      <rect x="1" y="12" width="2" height="3" fill="currentColor" opacity="0.2" />
+      <rect x="0" y="7" width="2" height="3" fill="currentColor" opacity="0.1" />
+      <rect x="1" y="2" width="2" height="3" fill="currentColor" opacity="0.05" />
     </svg>
   );
 }
@@ -109,17 +91,12 @@ export function WalletIcon({ className = 'w-6 h-6' }: IconProps) {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      strokeWidth={1.5} 
-      stroke="currentColor" 
+      viewBox="0 0 16 16"
       className={className}
     >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        d="M21 12a2.25 2.25 0 0 0-2.25-2.25H15a3 3 0 1 1-6 0H5.25A2.25 2.25 0 0 0 3 12m18 0v6a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 9m18 0V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v3" 
-      />
+      <rect x="1" y="4" width="14" height="10" fill="currentColor" />
+      <rect x="11" y="6" width="2" height="2" fill="#0D0D0D" />
+      <rect x="1" y="2" width="10" height="2" fill="currentColor" />
     </svg>
   );
 }
@@ -128,17 +105,67 @@ export function PlayIcon({ className = 'w-6 h-6' }: IconProps) {
   return (
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
-      viewBox="0 0 24 24" 
-      strokeWidth={1.5} 
-      stroke="currentColor" 
+      viewBox="0 0 16 16"
       className={className}
     >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" 
-      />
+      <polygon points="3,2 13,8 3,14" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function SkullIcon({ className = 'w-6 h-6' }: IconProps) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 16 16"
+      className={className}
+    >
+      <rect x="3" y="3" width="10" height="8" fill="currentColor" />
+      <rect x="2" y="4" width="1" height="6" fill="currentColor" />
+      <rect x="13" y="4" width="1" height="6" fill="currentColor" />
+      <rect x="4" y="2" width="8" height="1" fill="currentColor" />
+      <rect x="4" y="11" width="3" height="1" fill="currentColor" />
+      <rect x="9" y="11" width="3" height="1" fill="currentColor" />
+      <rect x="3" y="12" width="4" height="1" fill="currentColor" />
+      <rect x="9" y="12" width="4" height="1" fill="currentColor" />
+      <rect x="5" y="5" width="2" height="2" fill="#0D0D0D" />
+      <rect x="9" y="5" width="2" height="2" fill="#0D0D0D" />
+      <rect x="7" y="7" width="2" height="2" fill="#40E0D0" />
+      <rect x="6" y="9" width="4" height="1" fill="#0D0D0D" />
+    </svg>
+  );
+}
+
+export function FireIcon({ className = 'w-6 h-6' }: IconProps) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 16 16"
+      className={className}
+    >
+      <rect x="7" y="1" width="2" height="3" fill="#FFD700" />
+      <rect x="6" y="4" width="4" height="2" fill="#FFD700" />
+      <rect x="5" y="6" width="6" height="3" fill="#FFD700" />
+      <rect x="4" y="9" width="8" height="3" fill="#FFD700" />
+      <rect x="3" y="12" width="10" height="3" fill="#FFD700" />
+      <rect x="6" y="7" width="2" height="2" fill="#8B0000" />
+      <rect x="8" y="9" width="2" height="2" fill="#8B0000" />
+      <rect x="5" y="11" width="2" height="2" fill="#8B0000" />
+    </svg>
+  );
+}
+
+export function CoinIcon({ className = 'w-6 h-6' }: IconProps) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 16 16"
+      className={className}
+    >
+      <rect x="4" y="2" width="8" height="12" fill="#FFD700" />
+      <rect x="3" y="3" width="1" height="10" fill="#FFD700" />
+      <rect x="12" y="3" width="1" height="10" fill="#FFD700" />
+      <rect x="7" y="6" width="2" height="4" fill="#0D0D0D" />
     </svg>
   );
 } 

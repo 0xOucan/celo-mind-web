@@ -318,184 +318,186 @@ export default function TransactionMonitor() {
     }
   }, [forceVisible]);
 
-  // Don't render UI if not connected and there are no transactions or errors
-  if (!isConnected && (pendingTransactions.length === 0 && completedTransactions.length === 0 && !networkError) && !forceVisible) return null;
+  // Add a rendering function for the UI part of the component
+  const renderTransactionMonitor = () => {
+    // Don't render if no wallet is connected
+    if (!isConnected) return null;
+    
+    // Only show when there are pending/completed transactions or when forced visible
+    const shouldShow = pendingTransactions.length > 0 || 
+                       (completedTransactions.length > 0 && 
+                        Date.now() - (lastProcessed?.getTime() || 0) < KEEP_COMPLETED_FOR_MS) ||
+                       forceVisible;
+    
+    if (!shouldShow) return null;
 
-  // Count total transactions
-  const totalTransactions = pendingTransactions.length + completedTransactions.length;
-
-  // If no transactions and no errors, show a simple message in minimized state
-  const hasNoContent = totalTransactions === 0 && !networkError && !forceVisible;
-
-  // Render the transaction monitor UI
-  return (
-    <div className={`fixed bottom-4 right-4 w-72 bg-slate-800 text-white rounded-lg shadow-xl border border-slate-700 z-50 overflow-hidden transition-all duration-300 ${forceVisible ? 'opacity-100' : ''}`}>
-      <div 
-        className="p-3 bg-slate-700 border-b border-slate-600 font-medium flex justify-between items-center cursor-pointer"
-        onClick={() => setIsMinimized(!isMinimized)}
-      >
-        <div className="flex items-center">
-          <span>Transaction Status</span>
-          {totalTransactions > 0 && (
-            <span className="ml-2 bg-yellow-500 text-xs font-medium px-2 py-0.5 rounded-full">
-              {totalTransactions}
-            </span>
-          )}
-        </div>
-        <div>
-          {isMinimized ? (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
+    return (
+      <div className="fixed bottom-16 right-4 z-50 max-w-lg" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+        <div className="bg-mictlai-obsidian border-3 border-mictlai-gold shadow-pixel-lg pixel-panel w-96">
+          <div className="p-3 bg-black border-b-3 border-mictlai-gold/70 flex justify-between items-center">
+            <h3 className="text-sm font-pixel text-mictlai-gold flex items-center space-x-2">
+              <span className="mr-2">📡</span>
+              <span>TRANSACTION MONITOR</span>
+              {isProcessing && (
+                <svg className="animate-spin ml-2 h-4 w-4 text-mictlai-turquoise" viewBox="0 0 24 24">
+                  <circle 
+                    className="opacity-25" 
+                    cx="12" 
+                    cy="12" 
+                    r="10" 
+                    stroke="currentColor" 
+                    strokeWidth="4"
+                  ></circle>
+                  <path 
+                    className="opacity-75" 
+                    fill="currentColor" 
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+              )}
+            </h3>
+            
+            <div className="flex space-x-1">
+              <button 
+                onClick={() => {
+                  setIsMinimized(!isMinimized);
+                  setForceVisible(false);
+                }}
+                className="px-2 py-1 border border-mictlai-gold/50 text-mictlai-gold hover:bg-mictlai-gold/20"
+              >
+                {isMinimized ? '+' : '-'}
+              </button>
+            </div>
+          </div>
+          
+          {!isMinimized && (
+            <div className="max-h-80 overflow-y-auto">
+              {networkError && (
+                <div className="p-3 border-b border-mictlai-blood bg-black text-mictlai-blood font-pixel text-xs">
+                  <strong>NETWORK ERROR:</strong> {networkError}
+                  <button 
+                    onClick={() => ensureCorrectNetwork()}
+                    className="ml-2 px-2 py-0.5 border border-mictlai-blood hover:bg-mictlai-blood/20 text-xs"
+                  >
+                    RETRY
+                  </button>
+                </div>
+              )}
+              
+              {pendingTransactions.length > 0 && (
+                <div className="p-3 border-b-3 border-mictlai-gold/30">
+                  <h4 className="font-pixel text-mictlai-turquoise text-xs mb-2">PENDING TRANSACTIONS</h4>
+                  <div className="space-y-2">
+                    {pendingTransactions.map((tx) => (
+                      <div key={tx.id} className="border-3 border-mictlai-gold/30 p-2 shadow-pixel bg-black">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-pixel text-mictlai-gold text-xs">
+                            {tx.metadata?.description || 'Transaction'}
+                          </span>
+                          <div className="flex items-center">
+                            <span 
+                              className={`inline-block h-2 w-2 ${
+                                tx.status === 'submitted' ? 'bg-mictlai-turquoise' : 'bg-mictlai-gold'
+                              } mr-1 animate-pulse`}
+                            ></span>
+                            <span className="text-mictlai-bone/70 text-xs font-pixel">
+                              {tx.status === 'pending' ? 'PENDING' : 'SUBMITTED'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-mictlai-bone/60 text-xs font-pixel">
+                          {tx.to ? `TO: ${tx.to.substring(0, 10)}...` : ''}
+                          {tx.value ? ` | VALUE: ${tx.value}` : ''}
+                        </div>
+                        <div className="flex justify-between items-center mt-1 text-xs font-pixel">
+                          <span className="text-mictlai-bone/60">
+                            {tx.metadata?.chain ? `CHAIN: ${tx.metadata.chain.toUpperCase()}` : ''}
+                          </span>
+                          {tx.hash && (
+                            <a 
+                              href={getExplorerLink(tx)} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-mictlai-turquoise hover:text-mictlai-gold"
+                            >
+                              TX: {formatTxHash(tx.hash)}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {completedTransactions.length > 0 && (
+                <div className="p-3">
+                  <h4 className="font-pixel text-mictlai-turquoise text-xs mb-2">COMPLETED TRANSACTIONS</h4>
+                  <div className="space-y-2">
+                    {completedTransactions.slice(0, 5).map((tx) => (
+                      <div 
+                        key={tx.id} 
+                        className={`border-3 p-2 shadow-pixel bg-black ${
+                          tx.status === 'confirmed' 
+                            ? 'border-mictlai-turquoise/30' 
+                            : tx.status === 'failed' 
+                              ? 'border-mictlai-blood/30' 
+                              : 'border-mictlai-bone/30'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-pixel text-mictlai-bone text-xs">
+                            {tx.metadata?.description || 'Transaction'}
+                          </span>
+                          <div className="flex items-center">
+                            <span 
+                              className={`inline-block h-2 w-2 ${
+                                tx.status === 'confirmed' 
+                                  ? 'bg-mictlai-turquoise' 
+                                  : tx.status === 'failed' 
+                                    ? 'bg-mictlai-blood' 
+                                    : 'bg-mictlai-bone'
+                              } mr-1`}
+                            ></span>
+                            <span className={`text-xs font-pixel ${
+                              tx.status === 'confirmed' 
+                                ? 'text-mictlai-turquoise' 
+                                : tx.status === 'failed' 
+                                  ? 'text-mictlai-blood' 
+                                  : 'text-mictlai-bone/70'
+                            }`}>
+                              {tx.status.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                        {tx.hash && (
+                          <div className="mt-2 text-right">
+                            <a 
+                              href={getExplorerLink(tx)} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-mictlai-turquoise hover:text-mictlai-gold text-xs font-pixel hover:border-b hover:border-mictlai-gold"
+                            >
+                              VIEW ON {getExplorerName(tx)}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {completedTransactions.length > 5 && (
+                      <div className="text-center text-mictlai-bone/50 text-xs font-pixel">
+                        +{completedTransactions.length - 5} MORE TRANSACTIONS
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
-      
-      {!isMinimized && (
-        <>
-      {networkError && (
-        <div className="p-3 bg-red-900 border-b border-red-800">
-          <div className="font-medium mb-1">Network Error</div>
-          <div className="text-sm text-red-200 mb-2">{networkError.replace('Network Error: ', '')}</div>
-          <button 
-            onClick={async () => {
-              // Check if there are pending transactions
-              const pendingTxs = await getPendingTransactions();
-              
-              // Find the first pending transaction to determine which network to switch to
-              const firstPendingTx = pendingTxs.find(tx => tx.status === 'pending');
-              
-              if (firstPendingTx) {
-                ensureCorrectNetwork(firstPendingTx);
-              } else {
-                // Default to Base if no transactions pending
-                const wallet = getPrimaryWallet();
-                if (wallet) {
-                  try {
-                    const provider = await wallet.getEthereumProvider();
-                    if (provider) {
-                      await switchToChain(provider, 'base');
-                    }
-                  } catch (error) {
-                    console.error('Error switching to Base:', error);
-                  }
-                }
-              }
-            }}
-            className="bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
-          >
-            Switch Network
-          </button>
-        </div>
-      )}
-      
-          {hasNoContent ? (
-            <div className="p-4 text-center text-gray-400">
-              No transactions to display
-            </div>
-          ) : (
-            <div className="p-3 max-h-80 overflow-y-auto">
-      {pendingTransactions.length > 0 && (
-                <div className="mb-2">
-                  <div className="text-sm font-medium mb-2">Pending Transactions</div>
-          {pendingTransactions.map(tx => (
-            <div key={tx.id} className="mb-3 last:mb-0 bg-slate-700 p-2 rounded">
-              <div className="flex justify-between items-center mb-1">
-                <div className="text-xs text-slate-400">
-                  ID: {tx.id.slice(0, 10)}...
-                </div>
-                <div className={`
-                  text-xs px-2 py-0.5 rounded-full
-                  ${tx.status === 'pending' ? 'bg-yellow-500 text-yellow-900' : 
-                    tx.status === 'submitted' ? 'bg-blue-500 text-blue-900' : 
-                    'bg-slate-500 text-slate-900'}
-                `}>
-                  {tx.status}
-                </div>
-              </div>
-              
-              <div className="text-sm mb-1">
-                {tx.status === 'pending' && 'Waiting for wallet signature...'}
-                {tx.status === 'submitted' && 'Transaction submitted to blockchain...'}
-                      </div>
-                      
-                      <div className="text-xs text-slate-400 mb-1">
-                        To: {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
-                      </div>
-                      
-                      {/* Display transaction hash with link when available */}
-                      {tx.hash && (
-                        <div className="text-xs mt-1">
-                          <a 
-                            href={getExplorerLink(tx)} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 flex items-center"
-                          >
-                            <span className="mr-1">🔍</span>
-                            <span className="underline">{getExplorerName(tx)}: {formatTxHash(tx.hash)}</span>
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-              </div>
-              )}
-              
-              {/* Show completed transactions */}
-              {completedTransactions.length > 0 && (
-                <div>
-                  <div className="text-sm font-medium mb-2">
-                    {pendingTransactions.length > 0 ? 'Completed Transactions' : 'Transaction History'}
-                  </div>
-                  
-                  {completedTransactions.map(tx => (
-                    <div key={tx.id} className="mb-3 last:mb-0 bg-slate-700 p-2 rounded opacity-80">
-                      <div className="flex justify-between items-center mb-1">
-              <div className="text-xs text-slate-400">
-                          {new Date(tx.timestamp || Date.now()).toLocaleTimeString()}
-                        </div>
-                        <div className={`
-                          text-xs px-2 py-0.5 rounded-full
-                          ${tx.status === 'confirmed' ? 'bg-green-500 text-green-900' :
-                            tx.status === 'failed' ? 'bg-red-500 text-red-900' :
-                            tx.status === 'rejected' ? 'bg-orange-500 text-orange-900' :
-                            'bg-slate-500 text-slate-900'}
-                        `}>
-                          {tx.status}
-                        </div>
-                      </div>
-                      
-                      <div className="text-xs text-slate-400 mb-1">
-                To: {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
-              </div>
-                      
-                      {/* Display transaction hash with link when available */}
-                      {tx.hash && (
-                        <div className="text-xs">
-                          <a 
-                            href={getExplorerLink(tx)} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 flex items-center"
-                          >
-                            <span className="mr-1">🔍</span>
-                            <span className="underline">{getExplorerName(tx)}: {formatTxHash(tx.hash)}</span>
-                          </a>
-                        </div>
-                      )}
-            </div>
-          ))}
-        </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
+    );
+  };
+
+  return renderTransactionMonitor();
 } 

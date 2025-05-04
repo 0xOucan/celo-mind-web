@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { WalletIcon, LoadingIcon } from './Icons';
+import { WalletIcon, LoadingIcon, CoinIcon } from './Icons';
 import { getAllTokenBalances, TokenBalance } from '../services/blockchainService';
 import { DEFAULT_WALLET_ADDRESS } from '../config';
 import { useWallet } from '../providers/WalletContext';
@@ -72,24 +72,35 @@ export default function WalletBalances() {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
-      <div className="p-4 bg-yellow-100 dark:bg-slate-700 border-b border-yellow-200 dark:border-slate-600 flex justify-between items-center">
-        <h2 className="text-lg font-bold flex items-center">
-          <WalletIcon className="w-5 h-5 mr-2" />
-          Wallet Balances
+    <div className="bg-mictlai-obsidian border-3 border-mictlai-gold shadow-pixel-lg pixel-panel">
+      <div className="p-4 bg-black border-b-3 border-mictlai-gold/70 flex justify-between items-center">
+        <h2 className="text-lg font-bold flex items-center font-pixel text-mictlai-gold">
+          <CoinIcon className="w-5 h-5 mr-2" />
+          WALLET BALANCES
         </h2>
         
         <button 
           onClick={fetchBalances}
           disabled={isLoading}
-          className="p-1.5 rounded-md hover:bg-yellow-200 dark:hover:bg-slate-600 transition-colors"
+          className="p-1.5 border-2 border-mictlai-gold/70 hover:bg-mictlai-blood transition-colors shadow-pixel"
           title="Refresh balances"
         >
           {isLoading ? (
-            <LoadingIcon className="w-4 h-4" />
+            <LoadingIcon className="w-4 h-4 text-mictlai-gold" />
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" className="w-4 h-4 text-mictlai-gold">
+              <rect x="7" y="1" width="2" height="2" fill="currentColor" />
+              <rect x="9" y="3" width="2" height="2" fill="currentColor" />
+              <rect x="11" y="5" width="2" height="2" fill="currentColor" />
+              <rect x="13" y="7" width="2" height="2" fill="currentColor" />
+              <rect x="3" y="7" width="2" height="2" fill="currentColor" />
+              <rect x="5" y="9" width="2" height="2" fill="currentColor" />
+              <rect x="7" y="11" width="2" height="2" fill="currentColor" />
+              <rect x="9" y="13" width="2" height="2" fill="currentColor" />
+              <rect x="11" y="11" width="2" height="2" fill="currentColor" />
+              <rect x="13" y="9" width="2" height="2" fill="currentColor" />
+              <rect x="1" y="9" width="2" height="2" fill="currentColor" />
+              <rect x="3" y="11" width="2" height="2" fill="currentColor" />
             </svg>
           )}
         </button>
@@ -98,21 +109,21 @@ export default function WalletBalances() {
       <div className="p-4">
         {isLoading && balances.length === 0 ? (
           <div className="py-4 flex justify-center">
-            <LoadingIcon className="w-6 h-6" />
+            <LoadingIcon className="w-6 h-6 text-mictlai-gold" />
           </div>
         ) : error ? (
-          <div className="text-red-500 dark:text-red-400 text-center py-2">
+          <div className="text-mictlai-blood text-center py-2 font-pixel border-2 border-mictlai-blood p-3">
             {error}
           </div>
         ) : (
           <>
-            <div className="mb-4 px-3 py-2 bg-yellow-50 dark:bg-slate-700 rounded-lg text-center">
-              <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Connected Wallet</div>
+            <div className="mb-4 px-3 py-2 bg-black border-3 border-mictlai-gold/50 text-center shadow-pixel-inner">
+              <div className="text-xs text-mictlai-bone/70 mb-1 font-pixel">CONNECTED WALLET</div>
               <a 
                 href={`https://celoscan.io/address/${walletAddress}`}
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 font-mono text-sm hover:underline"
+                className="text-mictlai-turquoise font-pixel text-sm hover:text-mictlai-gold"
                 title={walletAddress}
               >
                 {shortenAddress(walletAddress)}
@@ -121,27 +132,27 @@ export default function WalletBalances() {
             
             <div className="space-y-3">
               {balances.map((token, index) => (
-                <div key={index} className="flex items-center justify-between p-3 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 border border-gray-100 dark:border-slate-700">
+                <div key={index} className="flex items-center justify-between p-3 hover:bg-black/40 border-3 border-mictlai-gold/50 shadow-pixel">
                   <div className="flex items-center">
-                    <span className="text-2xl mr-3">{token.icon}</span>
+                    <span className="text-2xl mr-3 pixel-pulse">{token.icon}</span>
                     <div>
-                      <div className="font-medium">{token.symbol}</div>
-                      <div className="text-sm text-slate-500 dark:text-slate-400">{token.balanceFormatted}</div>
+                      <div className="font-bold text-mictlai-gold font-pixel">{token.symbol}</div>
+                      <div className="text-sm text-mictlai-bone/80 font-pixel">{token.balanceFormatted}</div>
                     </div>
                   </div>
-                  <div className="text-xl font-bold">{token.balanceUsd}</div>
+                  <div className="text-xl font-bold text-mictlai-turquoise font-pixel">{token.balanceUsd}</div>
                 </div>
               ))}
             </div>
             
-            <div className="mt-6 p-3 bg-yellow-50 dark:bg-slate-700 rounded-lg text-center">
-              <div className="text-sm text-slate-600 dark:text-slate-400">Total Portfolio Value</div>
-              <div className="text-2xl font-bold">{totalValue}</div>
+            <div className="mt-6 p-3 bg-black border-3 border-mictlai-gold/70 text-center shadow-pixel">
+              <div className="text-sm text-mictlai-bone/70 font-pixel">TOTAL PORTFOLIO VALUE</div>
+              <div className="text-2xl font-bold text-mictlai-gold font-pixel">{totalValue}</div>
             </div>
             
             {lastUpdated && (
-              <div className="mt-4 text-xs text-center text-slate-500 dark:text-slate-400">
-                Last updated: {lastUpdated.toLocaleTimeString()}
+              <div className="mt-4 text-xs text-center text-mictlai-bone/50 font-pixel">
+                LAST UPDATED: {lastUpdated.toLocaleTimeString()}
               </div>
             )}
           </>

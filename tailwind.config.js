@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // MictlAI Aztec-inspired colors
+        // MictlAI Aztec-inspired colors with pixel art palette
         mictlai: {
           obsidian: '#0D0D0D',
           blood: '#8B0000',
@@ -36,8 +36,20 @@ export default {
         },
       },
       fontFamily: {
-        'aztec': ['Cinzel', 'serif'],
-        'body': ['Inter', 'system-ui', 'sans-serif'],
+        'aztec': ['Minecraft', 'Cinzel', 'serif'],
+        'body': ['Minecraft', 'Inter', 'system-ui', 'sans-serif'],
+        'pixel': ['Minecraft', 'monospace'],
+      },
+      borderWidth: {
+        '1': '1px',
+        '3': '3px',
+        '5': '5px',
+      },
+      boxShadow: {
+        'pixel': '3px 3px 0 rgba(0, 0, 0, 0.3)',
+        'pixel-lg': '5px 5px 0 rgba(0, 0, 0, 0.3)',
+        'pixel-inner': 'inset 3px 3px 0 rgba(0, 0, 0, 0.3)',
+        'pixel-gold': '3px 3px 0 rgba(255, 215, 0, 0.3)',
       },
     },
   },
