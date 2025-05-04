@@ -1,6 +1,6 @@
 # 🧠 MictlAI Web Interface
 
-A modern, responsive web interface for the MictlAI AI-powered cross-chain bridging platform connecting Base and Arbitrum networks.
+A modern, responsive web interface for the MictlAI AI-powered cross-chain bridging platform connecting Base, Arbitrum, and Mantle networks.
 
 ## 🌟 Features
 
@@ -11,7 +11,7 @@ A modern, responsive web interface for the MictlAI AI-powered cross-chain bridgi
 - 🌓 Light/Dark theme toggle with system preference detection
 - 📱 Responsive design for desktop and mobile devices
 - 🔒 Direct blockchain connection for verification
-- ⚡ Cross-chain bridging between Base and Arbitrum networks
+- ⚡ Cross-chain bridging between Base, Arbitrum, and Mantle networks
 - 🛡️ Enhanced security with no stored private keys
 - 🔌 Network validation and automatic network switching
 
@@ -54,6 +54,7 @@ VITE_API_URL=http://localhost:4000
 # Explorer URLs for transaction links
 VITE_BASE_EXPLORER_URL=https://basescan.org
 VITE_ARBITRUM_EXPLORER_URL=https://arbiscan.io
+VITE_MANTLE_EXPLORER_URL=https://mantlescan.xyz
 
 # Privy App ID for wallet integration
 VITE_PRIVY_APP_ID=your_privy_app_id
@@ -176,15 +177,27 @@ The MictlAI web interface implements several security best practices:
 - **Data Validation**: All inputs are validated before processing to prevent injection attacks
 - **Rate Limiting**: API endpoints implement rate limiting to prevent abuse
 
-## 🔄 Transaction Handling
+## 🔄 Cross-Chain Bridge Features
 
-MictlAI implements a robust transaction system:
+MictlAI implements a robust cross-chain bridging system:
 
-1. **AI-Generated Transactions**: The AI agent creates transaction requests based on your commands
-2. **Transaction Queue**: Transactions are queued for wallet signature
-3. **Wallet Signing**: Your connected wallet receives the transaction for approval
-4. **Status Monitoring**: Monitor transaction status in real-time in the UI
-5. **Transaction History**: View completed and pending transactions
+1. **Multiple Networks**: Supports bridging between Base, Arbitrum, and Mantle networks
+2. **Multiple Tokens**: Transfer XOC, MXNB, and USDT tokens across chains
+3. **Atomic Swaps**: Trustless cross-chain token swaps using an escrow mechanism
+4. **Real-time Status**: Monitor swap progress across chains in real-time
+5. **Fee Transparency**: Clear display of bridge fees (0.5%) and final received amount
+6. **Explorer Integration**: Direct links to view transactions on BaseScan, ArbiScan, and MantleScan
+
+### Supported Bridges
+
+| From | To | Tokens |
+|------|----|----|
+| Base | Arbitrum | XOC → MXNB |
+| Arbitrum | Base | MXNB → XOC |
+| Base | Mantle | XOC → USDT |
+| Mantle | Base | USDT → XOC |
+| Arbitrum | Mantle | MXNB → USDT |
+| Mantle | Arbitrum | USDT → MXNB |
 
 ## 👨‍💻 Contributing
 

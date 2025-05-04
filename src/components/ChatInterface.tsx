@@ -285,13 +285,13 @@ export default function ChatInterface() {
       setMessages([
         {
           id: 'welcome',
-          content: `👋 Hello! I'm CeloMΔIND, your AI-powered DeFi assistant for Celo blockchain. 
+          content: `👋 Hello! I'm MictlAI, your AI-powered cross-chain bridge assistant for Base, Arbitrum, and Mantle networks. 
           
 How can I help you today? You can ask me to:
 - 💰 Check your wallet balances
-- 🏦 Interact with AAVE lending protocol
-- 🌊 Manage your ICHI vault investments
-- 💱 Execute swaps on Mento
+- 🌉 Transfer tokens between networks
+- 🔄 Swap tokens across chains
+- 📊 Get quotes for cross-chain swaps
 
 Just type your request below!`,
           sender: 'agent',
