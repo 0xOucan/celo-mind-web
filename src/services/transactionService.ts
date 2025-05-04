@@ -1,7 +1,7 @@
 import { apiUrl } from '../config';
 import { createPublicClient, http, createWalletClient, custom } from 'viem';
 import { celo } from 'viem/chains';
-import { base, arbitrum } from "viem/chains";
+import { base, arbitrum, mantle } from "viem/chains";
 import { 
   CELO_CHAIN_HEX, 
   CELO_NETWORK_PARAMS,
@@ -25,7 +25,7 @@ export interface PendingTransaction {
     requiresSignature: boolean;
     dataSize: number;
     dataType: string;
-    chain?: 'celo' | 'base' | 'arbitrum';
+    chain?: 'celo' | 'base' | 'arbitrum' | 'mantle';
   };
 }
 
@@ -50,6 +50,10 @@ export const BASE_CHAIN_HEX = `0x${BASE_CHAIN_ID.toString(16)}`;
 export const ARBITRUM_CHAIN_ID = 42161;
 export const ARBITRUM_CHAIN_HEX = `0x${ARBITRUM_CHAIN_ID.toString(16)}`;
 
+// Mantle chain constants
+export const MANTLE_CHAIN_ID = 5000;
+export const MANTLE_CHAIN_HEX = `0x${MANTLE_CHAIN_ID.toString(16)}`;
+
 // Base RPC URLs in priority order
 export const BASE_RPC_URLS = [
   'https://mainnet.base.org',
@@ -62,6 +66,13 @@ export const ARBITRUM_RPC_URLS = [
   'https://arb1.arbitrum.io/rpc',
   'https://arbitrum-one.public.blastapi.io',
   'https://arbitrum.meowrpc.com'
+];
+
+// Mantle RPC URLs in priority order
+export const MANTLE_RPC_URLS = [
+  'https://rpc.mantle.xyz',
+  'https://mantle-mainnet.public.blastapi.io',
+  'https://mantle.publicnode.com'
 ];
 
 // Network parameters for wallet addition
@@ -88,6 +99,19 @@ export const ARBITRUM_NETWORK_PARAMS = {
   },
   rpcUrls: ARBITRUM_RPC_URLS,
   blockExplorerUrls: ['https://arbiscan.io/']
+};
+
+// Network parameters for wallet addition
+export const MANTLE_NETWORK_PARAMS = {
+  chainId: MANTLE_CHAIN_HEX,
+  chainName: 'Mantle Mainnet',
+  nativeCurrency: {
+    name: 'MNT',
+    symbol: 'MNT',
+    decimals: 18
+  },
+  rpcUrls: MANTLE_RPC_URLS,
+  blockExplorerUrls: ['https://explorer.mantle.xyz/']
 };
 
 /**
@@ -165,7 +189,7 @@ export const updateTransactionStatus = async (
 /**
  * Switch to a specific chain based on the chain parameter
  */
-export const switchToChain = async (provider: any, chain: 'celo' | 'base' | 'arbitrum'): Promise<boolean> => {
+export const switchToChain = async (provider: any, chain: 'celo' | 'base' | 'arbitrum' | 'mantle'): Promise<boolean> => {
   try {
     // Get current chain ID
     const currentChainId = await provider.request({ method: 'eth_chainId' });
@@ -202,7 +226,17 @@ export const switchToChain = async (provider: any, chain: 'celo' | 'base' | 'arb
       // Check if already on target chain
       if (currentChainId === targetChainHex) {
         console.log(`Already on ${targetChainName} network`);
-      return true;
+        return true;
+      }
+    } else if (chain === 'mantle') {
+      targetChainHex = MANTLE_CHAIN_HEX;
+      targetChainName = 'Mantle';
+      networkParams = MANTLE_NETWORK_PARAMS;
+      
+      // Check if already on target chain
+      if (currentChainId === targetChainHex) {
+        console.log(`Already on ${targetChainName} network`);
+        return true;
       }
     } else {
       throw new Error(`Unsupported chain: ${chain}`);
@@ -300,12 +334,12 @@ export const executeTransaction = async (
     
     if (provider) {
       // Determine which chain to use based on the transaction
-      let targetChain: 'celo' | 'base' | 'arbitrum' = 'celo'; // Default to Celo for backward compatibility
+      let targetChain: 'celo' | 'base' | 'arbitrum' | 'mantle' = 'celo'; // Default to Celo for backward compatibility
       
       // Check transaction metadata or destination address to determine chain
       if (transaction.metadata?.chain) {
         // If the transaction metadata specifies a chain, use that
-        targetChain = transaction.metadata.chain as 'celo' | 'base' | 'arbitrum';
+        targetChain = transaction.metadata.chain as 'celo' | 'base' | 'arbitrum' | 'mantle';
       } else {
         // Try to determine chain from the destination address
         // Base and Arbitrum token addresses we know about
@@ -317,6 +351,11 @@ export const executeTransaction = async (
           "0xF197FFC28c23E0309B5559e7a166f2c6164C80aA".toLowerCase(), // MXNB on Arbitrum
         ];
         
+        // Add Mantle tokens we know about
+        const MANTLE_TOKENS = [
+          "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE".toLowerCase(), // USDT on Mantle
+        ];
+        
         const toAddressLower = transaction.to.toLowerCase();
         
         if (BASE_TOKENS.includes(toAddressLower)) {
@@ -325,6 +364,9 @@ export const executeTransaction = async (
         } else if (ARBITRUM_TOKENS.includes(toAddressLower)) {
           targetChain = 'arbitrum';
           console.log('Detected Arbitrum chain transaction based on token address');
+        } else if (MANTLE_TOKENS.includes(toAddressLower)) {
+          targetChain = 'mantle';
+          console.log('Detected Mantle chain transaction based on token address');
         }
         // Otherwise, keep the default of 'celo'
       }
@@ -341,6 +383,9 @@ export const executeTransaction = async (
             break;
           case 'arbitrum':
             chain = arbitrum;
+            break;
+          case 'mantle':
+            chain = mantle;
             break;
           case 'celo':
           default:
@@ -514,6 +559,9 @@ export const createPrivyWalletClient = async (wallet: any) => {
       } else if (chainId === CELO_CHAIN_HEX) {
         currentChain = celo;
         console.log('Wallet is on Celo chain');
+      } else if (chainId === MANTLE_CHAIN_HEX) {
+        currentChain = mantle;
+        console.log('Wallet is on Mantle chain');
       } else {
         // Default to Base if not on a known chain
         currentChain = base;

@@ -13,6 +13,30 @@ export const CELO_RPC_URLS = [
   'https://celo-mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161' // Public Infura endpoint
 ];
 
+// Chain IDs for Base and Arbitrum
+export const BASE_CHAIN_ID = 8453;
+export const BASE_CHAIN_HEX = `0x${BASE_CHAIN_ID.toString(16)}`;
+export const ARBITRUM_CHAIN_ID = 42161;
+export const ARBITRUM_CHAIN_HEX = `0x${ARBITRUM_CHAIN_ID.toString(16)}`;
+export const MANTLE_CHAIN_ID = 5000;
+export const MANTLE_CHAIN_HEX = `0x${MANTLE_CHAIN_ID.toString(16)}`;
+
+// RPC URLs for Base, Arbitrum, and Mantle
+export const BASE_RPC_URLS = [
+  'https://mainnet.base.org',
+  'https://base-mainnet.public.blastapi.io'
+];
+
+export const ARBITRUM_RPC_URLS = [
+  'https://arb1.arbitrum.io/rpc',
+  'https://arbitrum-one.public.blastapi.io'
+];
+
+export const MANTLE_RPC_URLS = [
+  'https://rpc.mantle.xyz',
+  'https://mantle-mainnet.public.blastapi.io'
+];
+
 // Network parameters for wallet addition
 export const CELO_NETWORK_PARAMS = {
   chainId: CELO_CHAIN_HEX,
@@ -26,12 +50,73 @@ export const CELO_NETWORK_PARAMS = {
   blockExplorerUrls: ['https://celoscan.io/']
 };
 
-// Explorer URL formatters
-export const getExplorerAddressUrl = (address: string): string => 
-  `https://celoscan.io/address/${address}`;
+// Network parameters for Base
+export const BASE_NETWORK_PARAMS = {
+  chainId: BASE_CHAIN_HEX,
+  chainName: 'Base Mainnet',
+  nativeCurrency: {
+    name: 'ETH',
+    symbol: 'ETH',
+    decimals: 18
+  },
+  rpcUrls: BASE_RPC_URLS,
+  blockExplorerUrls: ['https://basescan.org/']
+};
 
-export const getExplorerTxUrl = (txHash: string): string => 
-  `https://celoscan.io/tx/${txHash}`;
+// Network parameters for Arbitrum
+export const ARBITRUM_NETWORK_PARAMS = {
+  chainId: ARBITRUM_CHAIN_HEX,
+  chainName: 'Arbitrum One',
+  nativeCurrency: {
+    name: 'ETH',
+    symbol: 'ETH',
+    decimals: 18
+  },
+  rpcUrls: ARBITRUM_RPC_URLS,
+  blockExplorerUrls: ['https://arbiscan.io/']
+};
+
+// Network parameters for Mantle
+export const MANTLE_NETWORK_PARAMS = {
+  chainId: MANTLE_CHAIN_HEX,
+  chainName: 'Mantle Mainnet',
+  nativeCurrency: {
+    name: 'MNT',
+    symbol: 'MNT',
+    decimals: 18
+  },
+  rpcUrls: MANTLE_RPC_URLS,
+  blockExplorerUrls: ['https://explorer.mantle.xyz/']
+};
+
+// Explorer URL formatters
+export const getExplorerAddressUrl = (address: string, network: 'celo' | 'base' | 'arbitrum' | 'mantle' = 'celo'): string => {
+  switch (network) {
+    case 'base':
+      return `https://basescan.org/address/${address}`;
+    case 'arbitrum':
+      return `https://arbiscan.io/address/${address}`;
+    case 'mantle':
+      return `https://explorer.mantle.xyz/address/${address}`;
+    case 'celo':
+    default:
+      return `https://celoscan.io/address/${address}`;
+  }
+};
+
+export const getExplorerTxUrl = (txHash: string, network: 'celo' | 'base' | 'arbitrum' | 'mantle' = 'celo'): string => {
+  switch (network) {
+    case 'base':
+      return `https://basescan.org/tx/${txHash}`;
+    case 'arbitrum':
+      return `https://arbiscan.io/tx/${txHash}`;
+    case 'mantle':
+      return `https://explorer.mantle.xyz/tx/${txHash}`;
+    case 'celo':
+    default:
+      return `https://celoscan.io/tx/${txHash}`;
+  }
+};
 
 // Transaction status enum
 export enum TransactionStatus {
@@ -76,11 +161,25 @@ export const EXPLORERS = {
     address: (address: string) => `https://celoscan.io/address/${address}`,
     token: (address: string) => `https://celoscan.io/token/${address}`
   },
-  CELO_ALFAJORES: {
-    name: 'Alfajores Explorer',
-    url: 'https://alfajores.celoscan.io',
-    tx: (hash: string) => `https://alfajores.celoscan.io/tx/${hash}`,
-    address: (address: string) => `https://alfajores.celoscan.io/address/${address}`,
-    token: (address: string) => `https://alfajores.celoscan.io/token/${address}`
+  BASE: {
+    name: 'Basescan',
+    url: 'https://basescan.org',
+    tx: (hash: string) => `https://basescan.org/tx/${hash}`,
+    address: (address: string) => `https://basescan.org/address/${address}`,
+    token: (address: string) => `https://basescan.org/token/${address}`
+  },
+  ARBITRUM: {
+    name: 'Arbiscan',
+    url: 'https://arbiscan.io',
+    tx: (hash: string) => `https://arbiscan.io/tx/${hash}`,
+    address: (address: string) => `https://arbiscan.io/address/${address}`,
+    token: (address: string) => `https://arbiscan.io/token/${address}`
+  },
+  MANTLE: {
+    name: 'Mantle Explorer',
+    url: 'https://explorer.mantle.xyz',
+    tx: (hash: string) => `https://explorer.mantle.xyz/tx/${hash}`,
+    address: (address: string) => `https://explorer.mantle.xyz/address/${address}`,
+    token: (address: string) => `https://explorer.mantle.xyz/token/${address}`
   }
 }; 
