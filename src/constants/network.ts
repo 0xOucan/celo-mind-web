@@ -20,6 +20,8 @@ export const ARBITRUM_CHAIN_ID = 42161;
 export const ARBITRUM_CHAIN_HEX = `0x${ARBITRUM_CHAIN_ID.toString(16)}`;
 export const MANTLE_CHAIN_ID = 5000;
 export const MANTLE_CHAIN_HEX = `0x${MANTLE_CHAIN_ID.toString(16)}`;
+export const ZKSYNC_CHAIN_ID = 324;
+export const ZKSYNC_CHAIN_HEX = `0x${ZKSYNC_CHAIN_ID.toString(16)}`;
 
 // RPC URLs for Base, Arbitrum, and Mantle
 export const BASE_RPC_URLS = [
@@ -35,6 +37,11 @@ export const ARBITRUM_RPC_URLS = [
 export const MANTLE_RPC_URLS = [
   'https://rpc.mantle.xyz',
   'https://mantle-mainnet.public.blastapi.io'
+];
+
+export const ZKSYNC_RPC_URLS = [
+  'https://mainnet.era.zksync.io',
+  'https://zksync-era.blockpi.network/v1/rpc/public'
 ];
 
 // Network parameters for wallet addition
@@ -89,8 +96,21 @@ export const MANTLE_NETWORK_PARAMS = {
   blockExplorerUrls: ['https://explorer.mantle.xyz/']
 };
 
+// Network parameters for zkSync Era
+export const ZKSYNC_NETWORK_PARAMS = {
+  chainId: ZKSYNC_CHAIN_HEX,
+  chainName: 'zkSync Era Mainnet',
+  nativeCurrency: {
+    name: 'ETH',
+    symbol: 'ETH',
+    decimals: 18
+  },
+  rpcUrls: ZKSYNC_RPC_URLS,
+  blockExplorerUrls: ['https://explorer.zksync.io/']
+};
+
 // Explorer URL formatters
-export const getExplorerAddressUrl = (address: string, network: 'celo' | 'base' | 'arbitrum' | 'mantle' = 'celo'): string => {
+export const getExplorerAddressUrl = (address: string, network: 'celo' | 'base' | 'arbitrum' | 'mantle' | 'zksync' = 'celo'): string => {
   switch (network) {
     case 'base':
       return `https://basescan.org/address/${address}`;
@@ -98,13 +118,15 @@ export const getExplorerAddressUrl = (address: string, network: 'celo' | 'base' 
       return `https://arbiscan.io/address/${address}`;
     case 'mantle':
       return `https://explorer.mantle.xyz/address/${address}`;
+    case 'zksync':
+      return `https://explorer.zksync.io/address/${address}`;
     case 'celo':
     default:
       return `https://celoscan.io/address/${address}`;
   }
 };
 
-export const getExplorerTxUrl = (txHash: string, network: 'celo' | 'base' | 'arbitrum' | 'mantle' = 'celo'): string => {
+export const getExplorerTxUrl = (txHash: string, network: 'celo' | 'base' | 'arbitrum' | 'mantle' | 'zksync' = 'celo'): string => {
   switch (network) {
     case 'base':
       return `https://basescan.org/tx/${txHash}`;
@@ -112,6 +134,8 @@ export const getExplorerTxUrl = (txHash: string, network: 'celo' | 'base' | 'arb
       return `https://arbiscan.io/tx/${txHash}`;
     case 'mantle':
       return `https://explorer.mantle.xyz/tx/${txHash}`;
+    case 'zksync':
+      return `https://explorer.zksync.io/tx/${txHash}`;
     case 'celo':
     default:
       return `https://celoscan.io/tx/${txHash}`;
@@ -181,5 +205,12 @@ export const EXPLORERS = {
     tx: (hash: string) => `https://explorer.mantle.xyz/tx/${hash}`,
     address: (address: string) => `https://explorer.mantle.xyz/address/${address}`,
     token: (address: string) => `https://explorer.mantle.xyz/token/${address}`
+  },
+  ZKSYNC: {
+    name: 'zkSync Explorer',
+    url: 'https://explorer.zksync.io',
+    tx: (hash: string) => `https://explorer.zksync.io/tx/${hash}`,
+    address: (address: string) => `https://explorer.zksync.io/address/${address}`,
+    token: (address: string) => `https://explorer.zksync.io/token/${address}`
   }
 }; 

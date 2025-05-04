@@ -1,7 +1,7 @@
 import { apiUrl } from '../config';
 import { createPublicClient, http, createWalletClient, custom } from 'viem';
 import { celo } from 'viem/chains';
-import { base, arbitrum, mantle } from "viem/chains";
+import { base, arbitrum, mantle, zkSync } from "viem/chains";
 import { 
   CELO_CHAIN_HEX, 
   CELO_NETWORK_PARAMS,
@@ -25,7 +25,7 @@ export interface PendingTransaction {
     requiresSignature: boolean;
     dataSize: number;
     dataType: string;
-    chain?: 'celo' | 'base' | 'arbitrum' | 'mantle';
+    chain?: 'celo' | 'base' | 'arbitrum' | 'mantle' | 'zksync';
   };
 }
 
@@ -54,6 +54,10 @@ export const ARBITRUM_CHAIN_HEX = `0x${ARBITRUM_CHAIN_ID.toString(16)}`;
 export const MANTLE_CHAIN_ID = 5000;
 export const MANTLE_CHAIN_HEX = `0x${MANTLE_CHAIN_ID.toString(16)}`;
 
+// Add zkSync Era chain constants
+export const ZKSYNC_CHAIN_ID = 324;
+export const ZKSYNC_CHAIN_HEX = `0x${ZKSYNC_CHAIN_ID.toString(16)}`;
+
 // Base RPC URLs in priority order
 export const BASE_RPC_URLS = [
   'https://mainnet.base.org',
@@ -73,6 +77,13 @@ export const MANTLE_RPC_URLS = [
   'https://rpc.mantle.xyz',
   'https://mantle-mainnet.public.blastapi.io',
   'https://mantle.publicnode.com'
+];
+
+// zkSync Era RPC URLs in priority order
+export const ZKSYNC_RPC_URLS = [
+  'https://mainnet.era.zksync.io',
+  'https://zksync-era.blockpi.network/v1/rpc/public',
+  'https://zksync.meowrpc.com'
 ];
 
 // Network parameters for wallet addition
@@ -112,6 +123,19 @@ export const MANTLE_NETWORK_PARAMS = {
   },
   rpcUrls: MANTLE_RPC_URLS,
   blockExplorerUrls: ['https://explorer.mantle.xyz/']
+};
+
+// Network parameters for zkSync Era
+export const ZKSYNC_NETWORK_PARAMS = {
+  chainId: ZKSYNC_CHAIN_HEX,
+  chainName: 'zkSync Era Mainnet',
+  nativeCurrency: {
+    name: 'ETH',
+    symbol: 'ETH',
+    decimals: 18
+  },
+  rpcUrls: ZKSYNC_RPC_URLS,
+  blockExplorerUrls: ['https://explorer.zksync.io/']
 };
 
 /**
@@ -189,7 +213,7 @@ export const updateTransactionStatus = async (
 /**
  * Switch to a specific chain based on the chain parameter
  */
-export const switchToChain = async (provider: any, chain: 'celo' | 'base' | 'arbitrum' | 'mantle'): Promise<boolean> => {
+export const switchToChain = async (provider: any, chain: 'celo' | 'base' | 'arbitrum' | 'mantle' | 'zksync'): Promise<boolean> => {
   try {
     // Get current chain ID
     const currentChainId = await provider.request({ method: 'eth_chainId' });
@@ -198,48 +222,33 @@ export const switchToChain = async (provider: any, chain: 'celo' | 'base' | 'arb
     let targetChainName: string;
     let networkParams: any;
     
-    if (chain === 'celo') {
-      targetChainHex = CELO_CHAIN_HEX;
-      targetChainName = 'Celo';
-      networkParams = CELO_NETWORK_PARAMS;
-      
-      // Check if already on target chain
-      if (currentChainId === targetChainHex) {
-        console.log(`Already on ${targetChainName} network`);
-        return true;
-      }
-    } else if (chain === 'base') {
-      targetChainHex = BASE_CHAIN_HEX;
-      targetChainName = 'Base';
-      networkParams = BASE_NETWORK_PARAMS;
-      
-      // Check if already on target chain
-      if (currentChainId === targetChainHex) {
-        console.log(`Already on ${targetChainName} network`);
-        return true;
-      }
-    } else if (chain === 'arbitrum') {
-      targetChainHex = ARBITRUM_CHAIN_HEX;
-      targetChainName = 'Arbitrum';
-      networkParams = ARBITRUM_NETWORK_PARAMS;
-      
-      // Check if already on target chain
-      if (currentChainId === targetChainHex) {
-        console.log(`Already on ${targetChainName} network`);
-        return true;
-      }
-    } else if (chain === 'mantle') {
-      targetChainHex = MANTLE_CHAIN_HEX;
-      targetChainName = 'Mantle';
-      networkParams = MANTLE_NETWORK_PARAMS;
-      
-      // Check if already on target chain
-      if (currentChainId === targetChainHex) {
-        console.log(`Already on ${targetChainName} network`);
-        return true;
-      }
-    } else {
-      throw new Error(`Unsupported chain: ${chain}`);
+    // Determine target chain parameters
+    switch (chain) {
+      case 'base':
+        targetChainHex = BASE_CHAIN_HEX;
+        targetChainName = 'Base';
+        networkParams = BASE_NETWORK_PARAMS;
+        break;
+      case 'arbitrum':
+        targetChainHex = ARBITRUM_CHAIN_HEX;
+        targetChainName = 'Arbitrum';
+        networkParams = ARBITRUM_NETWORK_PARAMS;
+        break;
+      case 'mantle':
+        targetChainHex = MANTLE_CHAIN_HEX;
+        targetChainName = 'Mantle';
+        networkParams = MANTLE_NETWORK_PARAMS;
+        break;
+      case 'zksync':
+        targetChainHex = ZKSYNC_CHAIN_HEX;
+        targetChainName = 'zkSync Era';
+        networkParams = ZKSYNC_NETWORK_PARAMS;
+        break;
+      case 'celo':
+      default:
+        targetChainHex = CELO_CHAIN_HEX;
+        targetChainName = 'Celo';
+        networkParams = CELO_NETWORK_PARAMS;
     }
     
     console.log(`Need to switch chains from ${currentChainId} to ${targetChainName} (${targetChainHex})`);
@@ -334,12 +343,12 @@ export const executeTransaction = async (
     
     if (provider) {
       // Determine which chain to use based on the transaction
-      let targetChain: 'celo' | 'base' | 'arbitrum' | 'mantle' = 'celo'; // Default to Celo for backward compatibility
+      let targetChain: 'celo' | 'base' | 'arbitrum' | 'mantle' | 'zksync' = 'celo'; // Default to Celo for backward compatibility
       
       // Check transaction metadata or destination address to determine chain
       if (transaction.metadata?.chain) {
         // If the transaction metadata specifies a chain, use that
-        targetChain = transaction.metadata.chain as 'celo' | 'base' | 'arbitrum' | 'mantle';
+        targetChain = transaction.metadata.chain as 'celo' | 'base' | 'arbitrum' | 'mantle' | 'zksync';
       } else {
         // Try to determine chain from the destination address
         // Base and Arbitrum token addresses we know about

@@ -40,7 +40,7 @@ export default function InfoPanel({ onActivateAgent }: InfoPanelProps) {
             <div className="text-2xl mb-2">⛓️</div>
             <h3 className="font-aztec font-bold text-mictlai-gold text-lg mb-2">Cross-Chain Bridge</h3>
             <p className="text-mictlai-bone/70">
-              Seamlessly transfer assets between Base and Arbitrum networks
+              Seamlessly transfer assets between Base, Arbitrum, Mantle, and zkSync Era networks
             </p>
           </div>
           <div className="p-6 border-b md:border-b-0 md:border-r border-mictlai-gold/20">
@@ -79,6 +79,8 @@ export default function InfoPanel({ onActivateAgent }: InfoPanelProps) {
         <ul className="list-disc pl-6 space-y-2 text-mictlai-bone/80">
           <li><span className="font-medium text-mictlai-gold">Base Network:</span> Transfer XOC tokens to Arbitrum</li>
           <li><span className="font-medium text-mictlai-gold">Arbitrum Network:</span> Transfer MXNB tokens to Base</li>
+          <li><span className="font-medium text-mictlai-gold">Mantle Network:</span> Bridge assets between Mantle and other networks</li>
+          <li><span className="font-medium text-mictlai-gold">zkSync Era:</span> Transfer USDT tokens to and from other supported networks</li>
         </ul>
         
         <div className="mt-8 text-center">

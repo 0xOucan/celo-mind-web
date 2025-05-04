@@ -1,11 +1,15 @@
 import { createPublicClient, http, formatUnits } from 'viem';
-import { celo } from 'viem/chains';
+import { celo, base, arbitrum, zkSync } from 'viem/chains';
 import { 
   CELO_RPC_URL, 
   DEFAULT_WALLET_ADDRESS, 
   TRACKED_TOKENS,
   TOKEN_PRICES_USD,
-  apiUrl
+  apiUrl,
+  BASE_RPC_URL,
+  ARBITRUM_RPC_URL,
+  MANTLE_RPC_URL,
+  ZKSYNC_RPC_URL
 } from '../config';
 
 // ERC20 ABI (minimal for balance checking)
@@ -43,10 +47,39 @@ export interface TokenBalance {
 }
 
 // Create public client for Celo
-const publicClient = createPublicClient({
+const celoClient = createPublicClient({
   chain: celo,
   transport: http(CELO_RPC_URL),
 });
+
+// Create public clients for other chains
+const baseClient = createPublicClient({
+  chain: base,
+  transport: http(BASE_RPC_URL),
+});
+
+const arbitrumClient = createPublicClient({
+  chain: arbitrum,
+  transport: http(ARBITRUM_RPC_URL),
+});
+
+// Mantle chain is not part of viem's built-in chains
+// We'd need to define it manually if needed
+
+// Create public client for zkSync Era
+const zkSyncClient = createPublicClient({
+  chain: zkSync,
+  transport: http(ZKSYNC_RPC_URL),
+});
+
+// Create a client mapping for easy access
+export const chainClients = {
+  celo: celoClient,
+  base: baseClient,
+  arbitrum: arbitrumClient,
+  // mantle: mantleClient, // Would need to be defined with manual chain config
+  zksync: zkSyncClient
+};
 
 /**
  * Get wallet address from backend
@@ -129,30 +162,66 @@ export const getWalletAddress = async (): Promise<string> => {
 };
 
 /**
- * Get native CELO balance
+ * Get native token balance on the specified chain
  */
-export const getNativeBalance = async (address: string = DEFAULT_WALLET_ADDRESS): Promise<bigint> => {
+export const getNativeBalance = async (
+  address: string = DEFAULT_WALLET_ADDRESS,
+  chain: 'celo' | 'base' | 'arbitrum' | 'zksync' = 'celo'
+): Promise<bigint> => {
   try {
-    const balance = await publicClient.getBalance({
+    let client;
+    switch (chain) {
+      case 'base':
+        client = baseClient;
+        break;
+      case 'arbitrum':
+        client = arbitrumClient;
+        break;
+      case 'zksync':
+        client = zkSyncClient;
+        break;
+      case 'celo':
+      default:
+        client = celoClient;
+    }
+
+    const balance = await client.getBalance({
       address: address as `0x${string}`,
     });
     return balance;
   } catch (error) {
-    console.error('Error getting native balance:', error);
+    console.error(`Error getting native balance on ${chain}:`, error);
     return BigInt(0);
   }
 };
 
 /**
- * Get ERC20 token balance
+ * Get ERC20 token balance on the specified chain
  */
 export const getTokenBalance = async (
   tokenAddress: string,
-  walletAddress: string = DEFAULT_WALLET_ADDRESS
+  walletAddress: string = DEFAULT_WALLET_ADDRESS,
+  chain: 'celo' | 'base' | 'arbitrum' | 'zksync' = 'celo'
 ): Promise<bigint> => {
   try {
+    let client;
+    switch (chain) {
+      case 'base':
+        client = baseClient;
+        break;
+      case 'arbitrum':
+        client = arbitrumClient;
+        break;
+      case 'zksync':
+        client = zkSyncClient;
+        break;
+      case 'celo':
+      default:
+        client = celoClient;
+    }
+
     // Use readContract instead of getContract().read
-    const balance = await publicClient.readContract({
+    const balance = await client.readContract({
       address: tokenAddress as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'balanceOf',
@@ -161,7 +230,7 @@ export const getTokenBalance = async (
     
     return balance as bigint;
   } catch (error) {
-    console.error(`Error getting balance for token ${tokenAddress}:`, error);
+    console.error(`Error getting balance for token ${tokenAddress} on ${chain}:`, error);
     return BigInt(0);
   }
 };

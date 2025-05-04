@@ -59,14 +59,39 @@ const TransactionLink = ({ txId }: { txId: string }) => {
   }
 
   if (transaction.status === 'confirmed' && transaction.hash) {
+    // Determine which explorer to use based on chain
+    let explorerUrl = `https://celoscan.io/tx/${transaction.hash}`;
+    let explorerName = 'Celoscan';
+    
+    if (transaction.metadata?.chain) {
+      switch(transaction.metadata.chain) {
+        case 'base':
+          explorerUrl = `https://basescan.org/tx/${transaction.hash}`;
+          explorerName = 'Basescan';
+          break;
+        case 'arbitrum':
+          explorerUrl = `https://arbiscan.io/tx/${transaction.hash}`;
+          explorerName = 'Arbiscan';
+          break;
+        case 'mantle':
+          explorerUrl = `https://explorer.mantle.xyz/tx/${transaction.hash}`;
+          explorerName = 'Mantle Explorer';
+          break;
+        case 'zksync':
+          explorerUrl = `https://explorer.zksync.io/tx/${transaction.hash}`;
+          explorerName = 'zkSync Explorer';
+          break;
+      }
+    }
+    
     return (
       <a 
-        href={`https://celoscan.io/tx/${transaction.hash}`} 
+        href={explorerUrl} 
         target="_blank" 
         rel="noopener noreferrer" 
         className="text-blue-400 hover:underline"
       >
-        View on Celoscan: {transaction.hash.substring(0, 6)}...{transaction.hash.substring(transaction.hash.length - 4)}
+        View on {explorerName}: {transaction.hash.substring(0, 6)}...{transaction.hash.substring(transaction.hash.length - 4)}
       </a>
     );
   }

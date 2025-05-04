@@ -53,6 +53,10 @@ export default function TransactionMonitor() {
         return `https://basescan.org/tx/${tx.hash}`;
       case 'arbitrum':
         return `https://arbiscan.io/tx/${tx.hash}`;
+      case 'mantle':
+        return `https://explorer.mantle.xyz/tx/${tx.hash}`;
+      case 'zksync':
+        return `https://explorer.zksync.io/tx/${tx.hash}`;
       case 'celo':
       default:
         return `https://celoscan.io/tx/${tx.hash}`;
@@ -68,6 +72,10 @@ export default function TransactionMonitor() {
         return 'Basescan';
       case 'arbitrum':
         return 'Arbiscan';
+      case 'mantle':
+        return 'Mantle Explorer';
+      case 'zksync':
+        return 'zkSync Explorer';
       case 'celo':
       default:
         return 'Celoscan';
@@ -84,11 +92,11 @@ export default function TransactionMonitor() {
       if (!wallet) return;
       
       // Determine which chain to use
-      let targetChain: 'celo' | 'base' | 'arbitrum' = 'celo'; // Default to Celo
+      let targetChain: 'celo' | 'base' | 'arbitrum' | 'mantle' | 'zksync' = 'celo'; // Default to Celo
       
       if (transaction?.metadata?.chain) {
         // Use the chain from transaction metadata if available
-        targetChain = transaction.metadata.chain;
+        targetChain = transaction.metadata.chain as 'celo' | 'base' | 'arbitrum' | 'mantle' | 'zksync';
       }
       
       try {
