@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ChatInterface from './components/ChatInterface';
 import WalletBalances from './components/WalletBalances';
+import LiquidityMonitor from './components/LiquidityMonitor';
 import InfoPanel from './components/InfoPanel';
 import WalletConnect, { WalletStatusBar } from './components/WalletConnect';
 import { PrivyProvider } from './providers/PrivyProvider';
@@ -107,8 +108,9 @@ export default function App() {
                 <div className="lg:col-span-2">
                   <ChatInterface />
                 </div>
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-1 space-y-6">
                   <WalletBalances />
+                  <LiquidityMonitor />
                 </div>
               </div>
             )}

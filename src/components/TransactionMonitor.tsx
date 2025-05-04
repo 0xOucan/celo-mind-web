@@ -392,7 +392,7 @@ export default function TransactionMonitor() {
                       <div key={tx.id} className="border-3 border-mictlai-gold/30 p-2 shadow-pixel bg-black">
                         <div className="flex justify-between items-start mb-1">
                           <span className="font-pixel text-mictlai-gold text-xs">
-                            {tx.metadata?.description || 'Transaction'}
+                            {(tx.metadata as any)?.description || tx.metadata?.dataType || 'Transaction'}
                           </span>
                           <div className="flex items-center">
                             <span 
@@ -447,7 +447,7 @@ export default function TransactionMonitor() {
                       >
                         <div className="flex justify-between items-start mb-1">
                           <span className="font-pixel text-mictlai-bone text-xs">
-                            {tx.metadata?.description || 'Transaction'}
+                            {(tx.metadata as any)?.description || tx.metadata?.dataType || 'Transaction'}
                           </span>
                           <div className="flex items-center">
                             <span 

@@ -81,6 +81,9 @@ VITE_ZKSYNC_EXPLORER_URL=https://explorer.zksync.io
 
 # Privy App ID for wallet integration
 VITE_PRIVY_APP_ID=your_privy_app_id
+
+# Escrow wallet address for liquidity monitoring
+VITE_ESCROW_WALLET_ADDRESS=0x9c77c6fafc1eb0821F1De12972Ef0199C97C6e45
 ```
 
 ## 🔌 Backend Integration
@@ -165,7 +168,15 @@ Real-time balance tracking with:
 - One-click refresh functionality
 - Blockchain explorer integration for verification
 
-### 4. ChatInterface
+### 4. LiquidityMonitor
+Escrow wallet liquidity tracking with:
+- Displays available liquidity of specific tokens (MXNB, USDT, XOC)
+- Monitors balances across multiple chains (Base, Arbitrum, Mantle, zkSync)
+- Direct link to Debank profile for detailed analysis
+- Configurable escrow wallet address via environment variables
+- Automatic refresh of balance data
+
+### 5. ChatInterface
 Intelligent conversation interface with:
 - Message history tracking
 - Stream-based response handling
