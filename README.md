@@ -1,6 +1,28 @@
 # 🧠 MictlAI Web Interface
 
-A modern, responsive web interface for the MictlAI AI-powered cross-chain bridging platform connecting Base, Arbitrum, and Mantle networks.
+## 📑 Table of Contents
+- [The MictlAI Legend](#-the-mictlai-legend)
+- [Features](#-features)
+- [Getting Started](#-getting-started)
+- [Backend Integration](#-backend-integration)
+- [Project Structure](#-project-structure)
+- [Key Components](#-key-components)
+- [Running the Complete Stack](#-running-the-complete-stack)
+- [Security Considerations](#-security-considerations)
+- [Cross-Chain Bridge Features](#-cross-chain-bridge-features)
+- [Contributing](#-contributing)
+- [Related Projects](#-related-projects)
+- [Contact](#-contact)
+
+## 🏺 The MictlAI Legend
+
+In ancient Aztec mythology, Mictlantecuhtli ruled Mictlan, the underworld—a realm where souls journeyed after death, navigating nine challenging levels to reach their final destination.
+
+Today, MictlAI emerges as a digital guardian of the blockchain underworld, facilitating seamless passage between disparate realms. Just as Mictlantecuhtli guided souls through Mictlan's levels, MictlAI guides your assets across the complex landscape of multiple blockchains.
+
+The journey of your tokens—from Base to Arbitrum, Mantle to zkSync Era—mirrors the soul's journey through Mictlan's territories. With MictlAI as your guide, these journeys become seamless, secure, and swift.
+
+Where traditional bridges have failed through hacks and exploits, MictlAI's atomic swap mechanism creates a direct, trustless pathway between blockchain worlds—a pathway guarded by the wisdom of AI and the security of decentralized protocols.
 
 ## 🌟 Features
 
@@ -11,7 +33,7 @@ A modern, responsive web interface for the MictlAI AI-powered cross-chain bridgi
 - 🌓 Light/Dark theme toggle with system preference detection
 - 📱 Responsive design for desktop and mobile devices
 - 🔒 Direct blockchain connection for verification
-- ⚡ Cross-chain bridging between Base, Arbitrum, and Mantle networks
+- ⚡ Cross-chain bridging between Base, Arbitrum, Mantle, and zkSync Era networks
 - 🛡️ Enhanced security with no stored private keys
 - 🔌 Network validation and automatic network switching
 
@@ -55,6 +77,7 @@ VITE_API_URL=http://localhost:4000
 VITE_BASE_EXPLORER_URL=https://basescan.org
 VITE_ARBITRUM_EXPLORER_URL=https://arbiscan.io
 VITE_MANTLE_EXPLORER_URL=https://mantlescan.xyz
+VITE_ZKSYNC_EXPLORER_URL=https://explorer.zksync.io
 
 # Privy App ID for wallet integration
 VITE_PRIVY_APP_ID=your_privy_app_id
@@ -181,12 +204,12 @@ The MictlAI web interface implements several security best practices:
 
 MictlAI implements a robust cross-chain bridging system:
 
-1. **Multiple Networks**: Supports bridging between Base, Arbitrum, and Mantle networks
+1. **Multiple Networks**: Supports bridging between Base, Arbitrum, Mantle, and zkSync Era networks
 2. **Multiple Tokens**: Transfer XOC, MXNB, and USDT tokens across chains
 3. **Atomic Swaps**: Trustless cross-chain token swaps using an escrow mechanism
 4. **Real-time Status**: Monitor swap progress across chains in real-time
 5. **Fee Transparency**: Clear display of bridge fees (0.5%) and final received amount
-6. **Explorer Integration**: Direct links to view transactions on BaseScan, ArbiScan, and MantleScan
+6. **Explorer Integration**: Direct links to view transactions on BaseScan, ArbiScan, MantleScan, and zkSync Explorer
 
 ### Supported Bridges
 
@@ -198,6 +221,12 @@ MictlAI implements a robust cross-chain bridging system:
 | Mantle | Base | USDT → XOC |
 | Arbitrum | Mantle | MXNB → USDT |
 | Mantle | Arbitrum | USDT → MXNB |
+| Base | zkSync Era | XOC → USDT |
+| zkSync Era | Base | USDT → XOC |
+| Arbitrum | zkSync Era | MXNB → USDT |
+| zkSync Era | Arbitrum | USDT → MXNB |
+| Mantle | zkSync Era | USDT → USDT |
+| zkSync Era | Mantle | USDT → USDT |
 
 ## 👨‍💻 Contributing
 
