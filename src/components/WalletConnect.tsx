@@ -85,7 +85,7 @@ export function WalletStatusBar() {
             WALLET
           </span>
           <a 
-            href={`https://celoscan.io/address/${connectedAddress || wallets[0].address}`}
+            href={`https://debank.com/profile/${connectedAddress || wallets[0].address}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-mictlai-turquoise hover:text-mictlai-gold border border-mictlai-turquoise/50 px-2 hover:border-mictlai-gold/50"
