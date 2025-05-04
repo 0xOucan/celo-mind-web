@@ -310,18 +310,10 @@ export default function ChatInterface() {
       setMessages([
         {
           id: 'welcome',
-          content: `👋 Hello! I'm MictlAI, your AI-powered cross-chain bridge assistant for Base, Arbitrum, and Mantle networks. 
-          
-How can I help you today? You can ask me to:
-- 💰 Check your wallet balances
-- 🌉 Transfer tokens between networks
-- 🔄 Swap tokens across chains
-- 📊 Get quotes for cross-chain swaps
-
-Just type your request below!`,
-          sender: 'agent',
+          type: AgentResponseType.INFO,
+          content: "Hello! 👋 I'm MictlAI, your AI-powered cross-chain bridge assistant for Base, Arbitrum, Mantle, and zkSync Era networks. How can I help you today? You can ask me to check your balances, perform swaps, or explain how cross-chain bridging works!",
           timestamp: Date.now(),
-          type: AgentResponseType.INFO
+          sender: 'agent'
         }
       ]);
     }
@@ -492,8 +484,8 @@ Just type your request below!`,
             {isLoading ? <LoadingIcon className="w-5 h-5" /> : <SendIcon className="w-5 h-5" />}
           </button>
         </div>
-        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-          Example commands: "check wallet balances", "aave dashboard", "swap 1 CELO to cUSD"
+        <div className="p-3 border-t dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-center text-xs text-zinc-500 dark:text-zinc-400">
+          <p>Example commands: <button onClick={() => setInput("check wallet balances")} className="underline">check wallet balances</button> • <button onClick={() => setInput("swap 0.1 XOC to USDT on Mantle")} className="underline">swap 0.1 XOC to USDT on Mantle</button> • <button onClick={() => setInput("transfer 0.1 USDT from zkSync to Base")} className="underline">transfer 0.1 USDT from zkSync to Base</button></p>
         </div>
       </form>
     </div>
